@@ -9,6 +9,7 @@ type SweetbookRequestOptions = {
   searchParams?: Record<string, string | number | undefined>;
   json?: JsonRecord;
   formData?: FormData;
+  idempotencyKey?: string;
 };
 
 type WebhookConfigInput = {
@@ -83,7 +84,7 @@ async function sweetbookRequest<T>({
 
   const headers = new Headers({
     Authorization: `Bearer ${getApiKey()}`,
-    "Idempotency-Key": crypto.randomUUID(),
+    "Idempotency-Key": options?.idempotencyKey ?? crypto.randomUUID(),
   });
 
   let body: string | FormData | undefined;
@@ -199,12 +200,13 @@ export const sweetbookClient = {
     });
   },
 
-  createOrder(payload: JsonRecord) {
+  createOrder(payload: JsonRecord, idempotencyKey?: string) {
     return sweetbookRequest({
       path: "/orders",
       options: {
         method: "POST",
         json: payload,
+        idempotencyKey,
       },
     });
   },

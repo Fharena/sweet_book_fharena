@@ -1,9 +1,19 @@
+import { createHash } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import type { CheckoutOrderRequest } from "@/lib/checkout-order";
 import { sweetbookClient } from "@/lib/server/sweetbook/client";
 
 export const runtime = "nodejs";
+
+function buildOrderIdempotencyKey(payload: CheckoutOrderRequest) {
+  const digest = createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex");
+
+  return `triplogue-order-${digest.slice(0, 48)}`;
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -128,7 +138,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    const data = await sweetbookClient.createOrder(parsed.data);
+    const data = await sweetbookClient.createOrder(
+      parsed.data,
+      buildOrderIdempotencyKey(parsed.data),
+    );
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     return NextResponse.json(
