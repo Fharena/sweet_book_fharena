@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4ecdf;
+  --foreground: #182128;
+  --surface: rgba(255, 251, 245, 0.74);
+  --surface-strong: rgba(255, 251, 245, 0.92);
+  --muted: #66717c;
+  --line: rgba(24, 33, 40, 0.12);
+  --accent: #156f66;
+  --accent-soft: #d7ece7;
+  --sand: #dfc7ad;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-newsreader);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+  background-image:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 30%),
+    linear-gradient(135deg, rgba(223, 199, 173, 0.32), transparent 45%),
+    linear-gradient(180deg, rgba(21, 111, 102, 0.08), transparent 50%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(21, 111, 102, 0.18);
+}
+
+.font-display {
+  font-family: var(--font-newsreader), serif;
+}
+
+.glass-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 80px rgba(64, 44, 24, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.soft-card {
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+}
+
+.eyebrow {
+  color: var(--accent);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(24, 33, 40, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 33, 40, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.map-dot {
+  position: relative;
+}
+
+.map-dot::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: rgba(21, 111, 102, 0.18);
+  animation: pulse 2.8s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
