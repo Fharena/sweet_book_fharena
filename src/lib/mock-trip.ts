@@ -4,6 +4,7 @@ export const navSteps = [
   { href: "/trips/review", label: "Review" },
   { href: "/book/preview", label: "Preview" },
   { href: "/checkout", label: "Order" },
+  { href: "/ops/webhooks", label: "Webhook Ops" },
 ];
 
 export const tripSummary = {
