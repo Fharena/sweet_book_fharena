@@ -8,8 +8,14 @@ import { sweetbookClient } from "@/lib/server/sweetbook/client";
 export const runtime = "nodejs";
 
 function buildOrderIdempotencyKey(payload: CheckoutOrderRequest) {
+  const stablePayload = {
+    items: payload.items,
+    shipping: payload.shipping,
+    ...(payload.externalUserId ? { externalUserId: payload.externalUserId } : {}),
+  };
+
   const digest = createHash("sha256")
-    .update(JSON.stringify(payload))
+    .update(JSON.stringify(stablePayload))
     .digest("hex");
 
   return `triplogue-order-${digest.slice(0, 48)}`;

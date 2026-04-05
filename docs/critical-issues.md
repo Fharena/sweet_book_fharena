@@ -103,7 +103,8 @@ Sweetbook 웹훅은 최초 등록 응답에서만 전체 `secretKey`를 반환�
 ### 대응
 
 - 체크아웃 흐름에서 먼저 테스트 책 생성과 finalization을 끝낸 뒤 주문하도록 UX를 분리
-- 주문 라우트에서 정규화된 payload를 해시해 안정적인 `Idempotency-Key`를 생성
+- 주문 라우트에서 `items + shipping + externalUserId`만 해시해 안정적인 `Idempotency-Key`를 생성
+- `externalRef`는 화면 재시도 때 값이 바뀔 수 있으므로 멱등성 해시 기준에서 제외
 - 주문 화면에는 실제 차감이 일어나는 단계임을 명확히 안내
 
 ### 남은 리스크
