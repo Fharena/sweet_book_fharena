@@ -89,3 +89,19 @@ export type SweetbookWebhookEvent =
   | "shipping.departed"
   | "shipping.delivered"
   | "webhook.exhausted";
+
+export type SweetbookWebhookVerificationStatus =
+  | "verified"
+  | "invalid-signature"
+  | "missing-secret";
+
+export type SweetbookWebhookReceipt = {
+  receiptUid: string;
+  eventType: string | null;
+  deliveryUid: string | null;
+  verificationStatus: SweetbookWebhookVerificationStatus;
+  receivedAt: string;
+  orderUid: string | null;
+  bookUid: string | null;
+  payloadPreview: string | null;
+};
