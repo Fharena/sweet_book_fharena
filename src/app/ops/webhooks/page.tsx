@@ -6,7 +6,7 @@ export default function WebhookOpsPage() {
     <AppShell
       eyebrow="Webhook Ops"
       title="Sweetbook 웹훅 운영 패널"
-      description="등록, 테스트 전송, 최근 delivery 이력을 한 화면에서 점검하면서 주문 상태 이벤트를 안전하게 붙일 수 있도록 구성했습니다."
+      description="등록, 테스트 전송, 최근 delivery 이력, 최근 수신 이벤트를 한 화면에서 점검하면서 주문 상태 이벤트를 안전하게 붙일 수 있도록 구성했습니다."
       aside={
         <div className="space-y-4">
           <article className="soft-card rounded-[28px] p-5">

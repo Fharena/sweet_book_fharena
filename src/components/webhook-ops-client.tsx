@@ -48,6 +48,42 @@ type DeliveryPayload = {
   error?: string;
 };
 
+type ReceiptPayload = {
+  data?: {
+    items?: Array<{
+      receiptUid?: string;
+      eventType?: string;
+      deliveryUid?: string;
+      receivedAt?: string | null;
+      verificationStatus?:
+        | "VERIFIED"
+        | "INVALID"
+        | "PENDING"
+        | "SKIPPED"
+        | string;
+      orderUid?: string;
+      bookUid?: string;
+      payload?: Record<string, unknown> | null;
+    }>;
+  };
+  items?: Array<{
+    receiptUid?: string;
+    eventType?: string;
+    deliveryUid?: string;
+    receivedAt?: string | null;
+    verificationStatus?:
+      | "VERIFIED"
+      | "INVALID"
+      | "PENDING"
+      | "SKIPPED"
+      | string;
+    orderUid?: string;
+    bookUid?: string;
+    payload?: Record<string, unknown> | null;
+  }>;
+  error?: string;
+};
+
 type TestPayload = {
   data?: {
     deliveryUid?: string;
@@ -76,6 +112,20 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+function normalizeReceiptItems(payload: ReceiptPayload) {
+  const candidates = payload.data?.items ?? payload.items ?? [];
+
+  return candidates.map((item) => ({
+    receiptUid: item.receiptUid ?? null,
+    eventType: item.eventType ?? null,
+    deliveryUid: item.deliveryUid ?? null,
+    receivedAt: item.receivedAt ?? null,
+    verificationStatus: item.verificationStatus ?? null,
+    orderUid: item.orderUid ?? item.payload?.orderUid?.toString?.() ?? null,
+    bookUid: item.bookUid ?? item.payload?.bookUid?.toString?.() ?? null,
+  }));
+}
+
 async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
@@ -92,12 +142,14 @@ export function WebhookOpsClient() {
   const [eventFilter, setEventFilter] = useState<SweetbookWebhookEvent | "ALL">("ALL");
   const [configState, setConfigState] = useState<WebhookConfigPayload | null>(null);
   const [deliveriesState, setDeliveriesState] = useState<DeliveryPayload | null>(null);
+  const [receiptsState, setReceiptsState] = useState<ReceiptPayload | null>(null);
   const [testState, setTestState] = useState<TestPayload | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshingReceipts, setIsRefreshingReceipts] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
 
   const selectedEventSet = useMemo(() => new Set(selectedEvents), [selectedEvents]);
@@ -166,6 +218,32 @@ export function WebhookOpsClient() {
     }
   }, [eventFilter, statusFilter]);
 
+  const refreshReceipts = useCallback(async () => {
+    setIsRefreshingReceipts(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/webhooks/sweetbook/receipts?limit=20", {
+        cache: "no-store",
+      });
+      const payload = await parseJson<ReceiptPayload>(response);
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "수신 이력을 불러오지 못했습니다.");
+      }
+
+      setReceiptsState(payload);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "수신 이력 조회 중 오류가 발생했습니다.",
+      );
+    } finally {
+      setIsRefreshingReceipts(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshConfig();
   }, [refreshConfig]);
@@ -173,6 +251,10 @@ export function WebhookOpsClient() {
   useEffect(() => {
     void refreshDeliveries();
   }, [refreshDeliveries]);
+
+  useEffect(() => {
+    void refreshReceipts();
+  }, [refreshReceipts]);
 
   async function handleSave() {
     if (!webhookUrl.trim()) {
@@ -288,6 +370,8 @@ export function WebhookOpsClient() {
     );
   }
 
+  const receiptItems = normalizeReceiptItems(receiptsState ?? {});
+
   return (
     <div className="space-y-4">
       <article className="soft-card rounded-[28px] p-5">
@@ -395,6 +479,87 @@ export function WebhookOpsClient() {
               </p>
             </div>
           ) : null}
+        </div>
+      </article>
+
+      <article className="soft-card rounded-[28px] p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="eyebrow text-[11px] font-semibold">Recent receipts</p>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+              최근 수신 이벤트
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              웹훅 수신이 실제로 들어왔는지 확인하고, 어떤 이벤트가 어떤 주문/책으로
+              연결됐는지 빠르게 점검하는 영역입니다.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-400"
+            onClick={() => void refreshReceipts()}
+            disabled={isRefreshingReceipts}
+          >
+            {isRefreshingReceipts ? "수신 이력 새로고침 중..." : "수신 이력 새로고침"}
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {receiptItems.length ? (
+            receiptItems.map((receipt) => (
+              <article
+                key={receipt.receiptUid ?? `${receipt.eventType}-${receipt.deliveryUid}-${receipt.receivedAt}`}
+                className="rounded-[24px] border border-[var(--line)] bg-white/85 px-5 py-4"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {receipt.eventType ?? "알 수 없는 이벤트"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      deliveryUid {receipt.deliveryUid ?? "-"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                    <span className="rounded-full bg-slate-950 px-3 py-1 text-white">
+                      {receipt.verificationStatus ?? "UNKNOWN"}
+                    </span>
+                    {receipt.bookUid ? (
+                      <span className="rounded-full bg-[rgba(21,111,102,0.12)] px-3 py-1 text-[rgba(21,111,102,1)]">
+                        bookUid {receipt.bookUid}
+                      </span>
+                    ) : null}
+                    {receipt.orderUid ? (
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700">
+                        orderUid {receipt.orderUid}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-2 text-sm leading-6 text-slate-600 md:grid-cols-2">
+                  <p>수신 시각: {formatDateTime(receipt.receivedAt)}</p>
+                  <p>검증 상태: {receipt.verificationStatus ?? "-"}</p>
+                  <p className="md:col-span-2">
+                    연결 정보:{" "}
+                    {receipt.orderUid || receipt.bookUid
+                      ? [
+                          receipt.orderUid ? `orderUid ${receipt.orderUid}` : null,
+                          receipt.bookUid ? `bookUid ${receipt.bookUid}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" / ")
+                      : "없음"}
+                  </p>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-[24px] border border-dashed border-[var(--line)] bg-white/65 px-5 py-10 text-sm text-slate-500">
+              아직 수신된 웹훅 이벤트가 없습니다. 테스트 전송이나 실제 주문 상태 변경 후
+              이 영역에 수신 로그가 표시됩니다.
+            </div>
+          )}
         </div>
       </article>
 
