@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { DemoTripLauncher } from "@/components/demo-trip-launcher";
+import { isDemoTripDraft } from "@/lib/demo-trip-draft";
 import { timelineGroups } from "@/lib/mock-trip";
 import {
   applyThemeSelectionToDraft,
@@ -47,6 +50,7 @@ export default function BookPreviewPage() {
     draft?.stats.totalPhotos ?? timelineGroups.length * 8,
     chapters.length,
   );
+  const isDemoDraft = isDemoTripDraft(draft);
   const price = estimatePrice(pageCount);
   const selectedThemeId = draft?.selectedThemeId ?? fallbackThemeId;
   const selectedTheme = resolveTravelTheme(selectedThemeId);
@@ -127,6 +131,34 @@ export default function BookPreviewPage() {
         <div className="soft-card rounded-[28px] p-5 text-sm text-slate-600">
           여행 초안을 불러오는 중입니다...
         </div>
+      ) : null}
+
+      {!draft && hydrated ? (
+        <DemoTripLauncher
+          layout="compact"
+          className="mb-4 bg-[linear-gradient(135deg,_rgba(255,255,255,0.94),_rgba(255,244,236,0.94))]"
+        />
+      ) : null}
+
+      {draft && isDemoDraft ? (
+        <article className="soft-card mb-4 rounded-[28px] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="section-kicker">샘플 여행 초안</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                이 미리보기는 데모용 여행 초안을 기준으로 생성되고 있습니다. 패턴을
+                바꿔 본 뒤 주문 단계로 넘어가면 책 생성과 웹훅 추적 흐름까지 빠르게
+                재현할 수 있습니다.
+              </p>
+            </div>
+            <Link
+              href="/checkout"
+              className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-800"
+            >
+              주문 단계로 이동
+            </Link>
+          </div>
+        </article>
       ) : null}
 
       <section className="hero-sheen rounded-[32px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(255,255,255,0.92),_rgba(255,244,236,0.96))] p-6 shadow-[0_18px_50px_rgba(82,55,29,0.08)] sm:p-8">

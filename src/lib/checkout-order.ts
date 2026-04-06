@@ -174,3 +174,11 @@ export function saveCheckoutOrderDraft(draft: CheckoutOrderDraft) {
 
   window.sessionStorage.setItem(CHECKOUT_ORDER_DRAFT_KEY, JSON.stringify(draft));
 }
+
+export function clearCheckoutOrderDraft() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.removeItem(CHECKOUT_ORDER_DRAFT_KEY);
+}

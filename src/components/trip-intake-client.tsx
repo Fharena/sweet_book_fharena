@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { DemoTripLauncher } from "@/components/demo-trip-launcher";
 import { tripSummary } from "@/lib/mock-trip";
 import { clearTripDraft, saveTripDraft } from "@/lib/trip-draft";
 import type { TripIntakeResult } from "@/lib/trip-domain";
@@ -482,6 +483,11 @@ export function TripIntakeClient() {
             </div>
           </div>
         </section>
+
+        <DemoTripLauncher
+          layout="compact"
+          className="bg-[linear-gradient(135deg,_rgba(255,255,255,0.92),_rgba(255,244,236,0.94))]"
+        />
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-4">

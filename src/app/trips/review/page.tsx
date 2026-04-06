@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { DemoTripLauncher } from "@/components/demo-trip-launcher";
+import { isDemoTripDraft } from "@/lib/demo-trip-draft";
 import { timelineGroups } from "@/lib/mock-trip";
 import {
   applyManualLocationTagToDraft,
@@ -23,6 +26,7 @@ export default function TripReviewPage() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const activeDraft = draft;
+  const isDemoDraft = isDemoTripDraft(activeDraft);
   const groups = activeDraft?.chapters ?? timelineGroups;
   const photosNeedingManualTagging = useMemo(
     () =>
@@ -134,6 +138,27 @@ export default function TripReviewPage() {
           </div>
         ) : null}
 
+        {activeDraft && isDemoDraft ? (
+          <article className="soft-card rounded-[28px] p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="section-kicker">샘플 여행 초안</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  지금 보고 있는 데이터는 발표와 리뷰를 위한 데모용 초안입니다. 위치
+                  보정이 필요한 사진을 한 번 태깅해 본 뒤 미리보기로 넘어가면 서비스
+                  가치가 가장 빠르게 전달됩니다.
+                </p>
+              </div>
+              <Link
+                href="/book/preview"
+                className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-800"
+              >
+                미리보기로 바로 이동
+              </Link>
+            </div>
+          </article>
+        ) : null}
+
         {activeDraft ? (
           <section className="hero-sheen rounded-[32px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(255,255,255,0.92),_rgba(255,244,236,0.96))] p-6 shadow-[0_18px_50px_rgba(82,55,29,0.08)] sm:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -210,6 +235,13 @@ export default function TripReviewPage() {
               </div>
             </div>
           </section>
+        ) : null}
+
+        {!activeDraft && hydrated ? (
+          <DemoTripLauncher
+            layout="compact"
+            className="bg-[linear-gradient(135deg,_rgba(255,255,255,0.94),_rgba(255,244,236,0.94))]"
+          />
         ) : null}
 
         {activeDraft ? (

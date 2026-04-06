@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { DemoTripLauncher } from "@/components/demo-trip-launcher";
+import { isDemoTripDraft } from "@/lib/demo-trip-draft";
 import { orderSummary } from "@/lib/mock-trip";
 import { useTripDraft } from "@/lib/use-trip-draft";
 import type {
@@ -309,6 +311,7 @@ function buildOrderRequest(draft: CheckoutOrderDraft): CheckoutOrderRequest {
 
 export function CheckoutOrderClient() {
   const { draft, hydrated } = useTripDraft();
+  const isDemoDraft = isDemoTripDraft(draft);
   const photoCount = draft?.stats.totalPhotos ?? 0;
   const chapterCount = draft?.chapters.length ?? orderSummary.chapters;
   const selectedTheme = resolveTravelTheme(draft?.selectedThemeId);
@@ -691,6 +694,34 @@ export function CheckoutOrderClient() {
         <div className="soft-card rounded-[28px] p-5 text-sm text-slate-600">
           여행 초안을 불러오는 중입니다...
         </div>
+      ) : null}
+
+      {!draft && hydrated ? (
+        <DemoTripLauncher
+          layout="compact"
+          className="bg-[linear-gradient(135deg,_rgba(255,255,255,0.94),_rgba(255,244,236,0.94))]"
+        />
+      ) : null}
+
+      {draft && isDemoDraft ? (
+        <article className="soft-card mb-4 rounded-[28px] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="section-kicker">샘플 여행 초안</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                현재 주문 단계는 데모용 여행 초안을 기준으로 이어지고 있습니다. 테스트
+                책 생성으로 bookUid를 만든 뒤 주문 요청과 웹훅 추적까지 한 흐름으로
+                확인할 수 있습니다.
+              </p>
+            </div>
+            <Link
+              href={opsHref}
+              className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-800"
+            >
+              웹훅 운영으로 이동
+            </Link>
+          </div>
+        </article>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">

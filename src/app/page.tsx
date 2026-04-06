@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
+import { DemoTripLauncher } from "@/components/demo-trip-launcher";
 import { previewThemes, timelineGroups, tripSummary } from "@/lib/mock-trip";
 
 export default function Home() {
@@ -82,13 +83,13 @@ export default function Home() {
                 href="/trips/new"
                 className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white"
               >
-                사진 불러오기 시작
+                실사진 업로드 시작
               </Link>
               <Link
-                href="/book/preview"
+                href="/trips/review"
                 className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-800"
               >
-                포토북 미리보기로 이동
+                검토 단계 먼저 보기
               </Link>
             </div>
           </div>
@@ -132,6 +133,8 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        <DemoTripLauncher />
 
         <div className="grid gap-4 md:grid-cols-3">
           {[
