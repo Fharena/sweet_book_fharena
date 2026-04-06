@@ -94,6 +94,12 @@ export default function Home() {
               >
                 검토 단계 먼저 보기
               </Link>
+              <Link
+                href="/ops/launchpad"
+                className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-800"
+              >
+                데모/제출 허브 열기
+              </Link>
             </div>
           </div>
 

@@ -53,6 +53,7 @@ export type CheckoutOrderRequest = {
 export const CHECKOUT_COMPOSE_RESULT_KEY = "triplogue:checkout-compose-result";
 export const CHECKOUT_ORDER_DRAFT_KEY = "triplogue:checkout-order-draft";
 export const CHECKOUT_ORDER_RESULT_KEY = "triplogue:checkout-order-result";
+export const CHECKOUT_SESSION_STORAGE_EVENT = "triplogue:checkout-changed";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -105,6 +106,7 @@ export function saveCheckoutComposeResult(result: CheckoutComposeResult) {
     CHECKOUT_COMPOSE_RESULT_KEY,
     JSON.stringify(result),
   );
+  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
 }
 
 export function clearCheckoutComposeResult() {
@@ -113,6 +115,7 @@ export function clearCheckoutComposeResult() {
   }
 
   window.sessionStorage.removeItem(CHECKOUT_COMPOSE_RESULT_KEY);
+  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
 }
 
 export function isCheckoutOrderResult(value: unknown): value is CheckoutOrderResult {
@@ -138,6 +141,7 @@ export function saveCheckoutOrderResult(result: CheckoutOrderResult) {
   }
 
   window.sessionStorage.setItem(CHECKOUT_ORDER_RESULT_KEY, JSON.stringify(result));
+  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
 }
 
 export function clearCheckoutOrderResult() {
@@ -146,6 +150,7 @@ export function clearCheckoutOrderResult() {
   }
 
   window.sessionStorage.removeItem(CHECKOUT_ORDER_RESULT_KEY);
+  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
 }
 
 export function isCheckoutOrderDraft(value: unknown): value is CheckoutOrderDraft {
@@ -173,6 +178,7 @@ export function saveCheckoutOrderDraft(draft: CheckoutOrderDraft) {
   }
 
   window.sessionStorage.setItem(CHECKOUT_ORDER_DRAFT_KEY, JSON.stringify(draft));
+  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
 }
 
 export function clearCheckoutOrderDraft() {
@@ -181,4 +187,5 @@ export function clearCheckoutOrderDraft() {
   }
 
   window.sessionStorage.removeItem(CHECKOUT_ORDER_DRAFT_KEY);
+  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
 }

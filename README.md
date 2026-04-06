@@ -98,10 +98,13 @@ npm run dev
 현재 MVP에는 운영 확인용 화면도 포함되어 있습니다.
 
 - `/ops/webhooks`: Sweetbook 웹훅 등록, 테스트 전송, delivery 이력 조회, 수신 로그 확인
+- `/ops/launchpad`: 현재 세션, 테스트 책, 주문 결과, 백엔드 상태를 한 번에 보는 데모/제출 허브
 - `/checkout`: 테스트 책 생성, 주문 요청, orderUid 또는 bookUid 기준 수신 추적
 - `/api/sweetbook/status`: API Key, Book Specs 연결, 웹훅 설정 여부를 점검하는 상태 API
 
 홈, 업로드, 운영 화면 우측에는 위 상태 API를 읽는 `백엔드 상태` 카드가 들어 있습니다.
+또한 `/ops/launchpad`에서는 현재 draft, 테스트 책, 주문 결과, 빠른 이동 링크를 한 화면에서 묶어
+발표/디버깅/제출 점검 기준점으로 사용할 수 있습니다.
 처음 실행할 때는 이 카드부터 보고 아래 항목이 살아 있는지 확인하면 됩니다.
 - Sweetbook 환경이 sandbox인지
 - API Key가 서버에 설정되어 있는지
