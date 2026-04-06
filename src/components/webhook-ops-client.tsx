@@ -824,7 +824,7 @@ export function WebhookOpsClient() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
                 {item.label}
               </p>
-              <p className="mt-3 font-display text-3xl leading-none text-slate-900">
+              <p className="mt-3 font-display text-[2rem] text-slate-900">
                 {item.value}
               </p>
               <p className="mt-3 text-sm leading-6 text-slate-600">{item.note}</p>

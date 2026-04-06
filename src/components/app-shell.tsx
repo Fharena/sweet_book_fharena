@@ -84,14 +84,14 @@ export function AppShell({
             </div>
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-5">
+          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+            <div className="min-w-0 space-y-5">
               <p className="eyebrow text-xs font-semibold">{eyebrow}</p>
               <div>
-                <h1 className="max-w-3xl font-display text-4xl leading-none sm:text-5xl lg:text-[3.7rem]">
+                <h1 className="max-w-4xl font-display text-3xl tracking-[-0.05em] text-slate-900 sm:text-[3.1rem] lg:text-[3.7rem]">
                   {title}
                 </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
                   {description}
                 </p>
               </div>
@@ -108,7 +108,7 @@ export function AppShell({
               </div>
             </div>
 
-            <div className="ink-panel rounded-[32px] px-5 py-5 text-white">
+            <div className="min-w-0 ink-panel rounded-[32px] px-5 py-5 text-white">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold">이번 화면의 역할</p>
                 <span className="travel-badge rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/82">
@@ -148,16 +148,17 @@ export function AppShell({
                 <Link
                   key={step.href}
                   href={step.href}
-                  className={`group rounded-full border px-4 py-2.5 text-sm font-medium transition ${
+                  aria-current={isActive ? "page" : undefined}
+                  className={`group rounded-full border px-4 py-2.5 text-sm font-medium transition hover:-translate-y-0.5 ${
                     isActive
-                      ? "border-transparent bg-slate-950 text-white shadow-[0_10px_22px_rgba(15,23,42,0.18)]"
+                      ? "border-[rgba(15,118,110,0.18)] bg-[linear-gradient(135deg,_rgba(15,118,110,0.14),_rgba(255,255,255,0.94))] text-[var(--accent-deep)] shadow-[0_12px_24px_rgba(10,78,85,0.12)]"
                       : "border-[var(--line)] bg-white/75 text-slate-700 hover:border-slate-400 hover:bg-white"
                   }`}
                 >
                   <span
                     className={`mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${
                       isActive
-                        ? "bg-white/12 text-white"
+                        ? "bg-[var(--accent)] text-white shadow-[0_8px_18px_rgba(10,78,85,0.18)]"
                         : "bg-[var(--accent-soft)] text-[var(--accent)] group-hover:bg-[var(--accent-secondary-soft)] group-hover:text-[var(--accent-secondary)]"
                     }`}
                   >
@@ -170,9 +171,9 @@ export function AppShell({
           </nav>
         </header>
 
-        <main className="grid gap-6 lg:grid-cols-[1.7fr_0.95fr]">
-          <section className="glass-panel rounded-[32px] p-6 sm:p-8">{children}</section>
-          <aside className="glass-panel rounded-[32px] p-6 sm:p-8">{aside}</aside>
+        <main className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.95fr)]">
+          <section className="min-w-0 glass-panel rounded-[32px] p-6 sm:p-8">{children}</section>
+          <aside className="min-w-0 glass-panel rounded-[32px] p-6 sm:p-8">{aside}</aside>
         </main>
       </div>
     </div>

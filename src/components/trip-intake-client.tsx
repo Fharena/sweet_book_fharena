@@ -355,9 +355,9 @@ export function TripIntakeClient() {
       <form className="space-y-6" onSubmit={handleSubmit}>
         <section className="editorial-panel hero-sheen rounded-[32px] p-6 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-2xl space-y-4">
+            <div className="max-w-2xl min-w-0 space-y-4">
               <span className="section-kicker">업로드 센터</span>
-              <h2 className="font-display text-4xl leading-none text-slate-900">
+              <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.7rem]">
                 여행 사진을 올리면 정리 상태가 바로 보입니다.
               </h2>
               <p className="text-sm leading-6 text-slate-600">

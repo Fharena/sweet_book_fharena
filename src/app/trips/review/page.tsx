@@ -229,7 +229,7 @@ export default function TripReviewPage() {
         {activeDraft ? (
           <section className="hero-sheen rounded-[32px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(255,255,255,0.92),_rgba(255,244,236,0.96))] p-6 shadow-[0_18px_50px_rgba(82,55,29,0.08)] sm:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-              <div className="max-w-2xl space-y-4">
+              <div className="max-w-2xl min-w-0 space-y-4">
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                     자동 그룹핑
@@ -238,7 +238,7 @@ export default function TripReviewPage() {
                     수동 보정 대기
                   </span>
                 </div>
-                <h2 className="font-display text-4xl leading-none text-slate-900 sm:text-5xl">
+                <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.8rem]">
                   사진이 이야기처럼 이어지도록 먼저 정리합니다.
                 </h2>
                 <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
@@ -246,7 +246,7 @@ export default function TripReviewPage() {
                 </p>
               </div>
 
-              <div className="grid min-w-full gap-3 sm:min-w-[18rem]">
+              <div className="grid w-full gap-3 sm:min-w-[18rem]">
                 <div className="rounded-[24px] border border-[var(--line)] bg-white/85 px-5 py-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                     사진
@@ -316,7 +316,7 @@ export default function TripReviewPage() {
             <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
                 <p className="eyebrow text-[11px] font-semibold">수동 태깅</p>
-                <h2 className="font-display text-4xl leading-none text-slate-900">
+                <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.5rem]">
                   위치가 비는 사진만 빠르게 보정합니다.
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
@@ -457,7 +457,7 @@ export default function TripReviewPage() {
                   {"photoIds" in group ? "업로드 기준" : group.time}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="font-display text-4xl leading-none text-slate-900">
+                  <h2 className="font-display text-[2.2rem] text-slate-900 sm:text-[2.7rem]">
                     {group.title}
                   </h2>
                   <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
@@ -474,7 +474,7 @@ export default function TripReviewPage() {
                 </p>
               </div>
 
-              <div className="grid min-w-full gap-3 sm:min-w-[16rem]">
+              <div className="grid w-full gap-3 sm:min-w-[16rem]">
                 <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                     사진 수

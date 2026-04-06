@@ -25,7 +25,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-manrope);
-  --font-display: var(--font-newsreader);
+  --font-display: var(--font-manrope);
 }
 
 * {
@@ -41,7 +41,14 @@ body {
   isolation: isolate;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-manrope), sans-serif;
+  font-family:
+    var(--font-manrope),
+    "Pretendard Variable",
+    Pretendard,
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    sans-serif;
   background-image:
     radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.88), transparent 24%),
     radial-gradient(circle at 84% 16%, rgba(243, 123, 87, 0.16), transparent 26%),
@@ -84,7 +91,18 @@ a {
 }
 
 .font-display {
-  font-family: var(--font-newsreader), serif;
+  font-family:
+    var(--font-manrope),
+    "Pretendard Variable",
+    Pretendard,
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    sans-serif;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+  text-wrap: balance;
+  word-break: keep-all;
 }
 
 .glass-panel {

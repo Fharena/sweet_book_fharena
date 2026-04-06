@@ -13,7 +13,7 @@ export default function WebhookOpsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="eyebrow text-[11px] font-semibold">운영 기준</p>
-                <h3 className="mt-3 font-display text-3xl leading-none text-slate-900">
+                <h3 className="mt-3 font-display text-[2rem] text-slate-900">
                   등록 즉시 확인하고, 이후엔 안전하게 숨기는 흐름
                 </h3>
               </div>

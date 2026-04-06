@@ -110,7 +110,7 @@ export default function BookPreviewPage() {
             <p className="section-kicker">현재 선택된 패턴</p>
             <div className={`mt-4 rounded-[24px] px-4 py-4 ${selectedTheme.spotlightClassName}`}>
               <div className="flex items-center justify-between gap-3">
-                <p className="font-display text-3xl leading-none text-slate-900">
+                <p className="font-display text-[2rem] text-slate-900">
                   {selectedTheme.name}
                 </p>
                 <span
@@ -163,7 +163,7 @@ export default function BookPreviewPage() {
 
       <section className="hero-sheen rounded-[32px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(255,255,255,0.92),_rgba(255,244,236,0.96))] p-6 shadow-[0_18px_50px_rgba(82,55,29,0.08)] sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-2xl space-y-4">
+          <div className="max-w-2xl min-w-0 space-y-4">
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                 패턴 비교
@@ -172,7 +172,7 @@ export default function BookPreviewPage() {
                 Sweetbook 조립 반영
               </span>
             </div>
-            <h2 className="font-display text-4xl leading-none text-slate-900 sm:text-5xl">
+            <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.8rem]">
               앱에서 고른 무드가 실제 포토북 계획까지 이어집니다.
             </h2>
             <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
@@ -201,7 +201,7 @@ export default function BookPreviewPage() {
             </div>
           </div>
 
-          <div className="grid min-w-full gap-3 sm:min-w-[18rem]">
+          <div className="grid w-full gap-3 sm:min-w-[18rem]">
             <div className="rounded-[28px] border border-[var(--line)] bg-white/85 px-5 py-5">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 페이지</p>
               <p className="mt-2 text-4xl font-semibold text-slate-900">{pageCount}</p>
@@ -246,7 +246,7 @@ export default function BookPreviewPage() {
                 >
                   <div className={`rounded-[24px] p-4 ${theme.spotlightClassName}`}>
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-display text-3xl leading-none text-slate-900">
+                      <p className="font-display text-[1.95rem] text-slate-900">
                         {theme.name}
                       </p>
                       <span
@@ -283,7 +283,7 @@ export default function BookPreviewPage() {
                 {selectedTheme.name}
               </span>
             </div>
-            <h2 className="mt-14 font-display text-5xl leading-none">
+            <h2 className="mt-14 max-w-sm font-display text-4xl text-white sm:text-[3.25rem]">
               {draft ? draft.tripName : "밤의 기록"}
             </h2>
             <p className="mt-4 max-w-sm text-sm leading-6 text-white/80">
@@ -381,7 +381,7 @@ export default function BookPreviewPage() {
                           {chapterDateLabel}
                         </span>
                       </div>
-                      <h3 className="mt-4 font-display text-4xl leading-none text-slate-900">
+                      <h3 className="mt-4 font-display text-[2.2rem] text-slate-900 sm:text-[2.7rem]">
                         {chapterPlaceLabel}
                       </h3>
                       <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -389,7 +389,7 @@ export default function BookPreviewPage() {
                       </p>
                     </div>
 
-                    <div className="grid min-w-full gap-3 sm:min-w-[17rem]">
+                    <div className="grid w-full gap-3 sm:min-w-[17rem]">
                       <div
                         className={`rounded-[24px] border border-[var(--line)] p-4 ${selectedTheme.spotlightClassName}`}
                       >
@@ -451,7 +451,7 @@ export default function BookPreviewPage() {
 
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="font-display text-4xl leading-none text-slate-900">
+                      <h3 className="font-display text-[2.2rem] text-slate-900 sm:text-[2.7rem]">
                         {group.title}
                       </h3>
                       <span

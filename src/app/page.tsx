@@ -163,7 +163,7 @@ export default function Home() {
           <div className="grid gap-4 md:grid-cols-3">
             {previewThemes.map((theme) => (
               <article key={theme.name} className="soft-card rounded-[28px] p-5">
-                <p className="font-display text-3xl leading-none text-slate-900">
+                <p className="font-display text-[1.95rem] text-slate-900">
                   {theme.name}
                 </p>
                 <p className="mt-3 text-sm leading-6 text-slate-600">{theme.note}</p>
