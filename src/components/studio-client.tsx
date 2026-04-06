@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import type {
@@ -184,6 +183,14 @@ function getFileKey(file: File) {
   return `${file.name}:${file.size}`;
 }
 
+function isAcceptedImageFile(file: File) {
+  if (file.type.startsWith("image/")) {
+    return true;
+  }
+
+  return /\.(avif|bmp|gif|heic|heif|jpeg|jpg|png|tiff|webp)$/i.test(file.name);
+}
+
 function buildOrderPayload(draft: CheckoutOrderDraft): OrderPayload {
   return {
     items: [
@@ -265,14 +272,7 @@ function PhotoSurface({
       className={`relative overflow-hidden rounded-[28px] border border-[rgba(255,255,255,0.35)] bg-[linear-gradient(160deg,_rgba(15,23,42,0.88),_rgba(15,118,110,0.42))] ${className ?? ""}`.trim()}
     >
       {src ? (
-        <Image
-          src={src}
-          alt={photo.originalName}
-          fill
-          unoptimized
-          sizes="(max-width: 768px) 100vw, 50vw"
-          className="object-cover"
-        />
+        <img src={src} alt={photo.originalName} className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full min-h-[12rem] items-end bg-[linear-gradient(160deg,_rgba(15,23,42,0.88),_rgba(15,118,110,0.42))] p-4 text-white">
           <div>
@@ -448,6 +448,7 @@ export function StudioClient() {
   const searchParams = useSearchParams();
   const { draft } = useTripDraft();
   const topRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [tripName, setTripName] = useState("새 여행");
   const [travelStart, setTravelStart] = useState("");
@@ -589,8 +590,9 @@ export function StudioClient() {
   }
 
   function handleSelectFiles(nextFiles: FileList | File[]) {
-    const accepted = Array.from(nextFiles).filter((file) => file.type.startsWith("image/"));
+    const accepted = Array.from(nextFiles).filter(isAcceptedImageFile);
     if (accepted.length === 0) {
+      setUploadError("이미지 파일만 선택할 수 있습니다. 갤러리에서 원본 사진을 다시 골라 주세요.");
       return;
     }
 
@@ -1063,6 +1065,7 @@ export function StudioClient() {
                     </p>
                   </label>
                   <input
+                    ref={fileInputRef}
                     id="studio-photo-picker"
                     type="file"
                     accept="image/*"
@@ -1072,31 +1075,63 @@ export function StudioClient() {
                       if (event.target.files) {
                         handleSelectFiles(event.target.files);
                       }
+                      event.currentTarget.value = "";
                     }}
                   />
 
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      사진 다시 고르기
+                    </button>
+                    {previewFiles.length > 0 ? (
+                      <span className="rounded-full bg-[var(--accent-soft)] px-4 py-3 text-sm font-semibold text-[var(--accent)]">
+                        {previewFiles.length}장 선택됨
+                      </span>
+                    ) : null}
+                  </div>
+
                   {previewFiles.length > 0 ? (
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      {previewFiles.map((item) => (
-                        <div key={item.key} className="overflow-hidden rounded-[26px] border border-[var(--line)] bg-white">
-                          <div className="relative h-44 w-full">
-                            <Image
-                              src={item.preview}
-                              alt={item.file.name}
-                              fill
-                              unoptimized
-                              sizes="(max-width: 768px) 100vw, 33vw"
-                              className="object-cover"
-                            />
+                    <div className="space-y-4">
+                      <div className="rounded-[24px] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-4 py-3 text-sm text-slate-700">
+                        사진이 선택되면 아래 목록과 썸네일이 바로 보여야 정상입니다. 이 목록이 보이면 다음 버튼으로 업로드를 진행할 수 있습니다.
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {previewFiles.map((item) => (
+                          <div key={item.key} className="overflow-hidden rounded-[26px] border border-[var(--line)] bg-white">
+                            <img src={item.preview} alt={item.file.name} className="h-44 w-full object-cover" />
+                            <div className="px-4 py-4">
+                              <p className="truncate text-sm font-semibold text-slate-900">
+                                {item.file.name}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">{formatBytes(item.file.size)}</p>
+                            </div>
                           </div>
-                          <div className="px-4 py-4">
-                            <p className="truncate text-sm font-semibold text-slate-900">
-                              {item.file.name}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500">{formatBytes(item.file.size)}</p>
-                          </div>
+                        ))}
+                      </div>
+                      <div className="rounded-[24px] border border-[var(--line)] bg-white px-4 py-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          선택한 파일 목록
+                        </p>
+                        <div className="mt-3 grid gap-2">
+                          {previewFiles.map((item, index) => (
+                            <div
+                              key={`name-${item.key}`}
+                              className="flex items-center justify-between gap-3 rounded-[18px] bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                            >
+                              <span className="min-w-0 truncate">
+                                {index + 1}. {item.file.name}
+                              </span>
+                              <span className="shrink-0 text-xs text-slate-500">
+                                {formatBytes(item.file.size)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
                     </div>
                   ) : null}
 
