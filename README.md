@@ -128,6 +128,7 @@ npm run dev
 - [제출 체크리스트](docs/submission-checklist.md)
 - [운영/주문 확인 런북](docs/operations-order-runbook.md)
 - [크리티컬 이슈 기록](docs/critical-issues.md)
+- [Git 운영 규칙](docs/git-operation-rules.md)
 
 ## 현재 작업 단위
 
