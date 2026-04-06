@@ -50,6 +50,27 @@ const defaultOrderDraft: CheckoutOrderDraft = {
   memo: "",
 };
 
+const demoOrderPreset = {
+  ordererName: "Triplogue Demo",
+  recipientName: "홍길동",
+  recipientPhone: "010-1234-5678",
+  postalCode: "06134",
+  address1: "서울 강남구 테헤란로 123",
+  address2: "Triplogue Studio 5층",
+  memo: "샘플 초안 데모용 배송지",
+} satisfies Omit<CheckoutOrderDraft, "bookUid" | "quantity">;
+
+const demoOrderDraftPreset: Omit<CheckoutOrderDraft, "bookUid"> = {
+  ordererName: "Triplogue Demo",
+  quantity: 1,
+  recipientName: "김여행",
+  recipientPhone: "010-5555-1234",
+  postalCode: "06123",
+  address1: "서울특별시 강남구 테헤란로 123",
+  address2: "트립로그 스튜디오 8층",
+  memo: "샘플 포토북 데모용 배송지",
+};
+
 type TrackingReceiptPayload = {
   data?: {
     items?: Array<{
@@ -352,6 +373,15 @@ export function CheckoutOrderClient() {
   const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
   const [lastTrackingAt, setLastTrackingAt] = useState<string | null>(null);
   const [trackingRefreshToken, setTrackingRefreshToken] = useState(0);
+  const hasShippingDraftContent = Boolean(
+    form.ordererName.trim() ||
+      form.recipientName.trim() ||
+      form.recipientPhone.trim() ||
+      form.postalCode.trim() ||
+      form.address1.trim() ||
+      form.address2.trim() ||
+      form.memo.trim(),
+  );
 
   const trackingSourceKey = orderResult?.orderUid?.trim()
     ? ("orderUid" as const)
@@ -392,6 +422,15 @@ export function CheckoutOrderClient() {
   const opsHref = opsSearchParams.size
     ? `/ops/webhooks?${opsSearchParams.toString()}`
     : "/ops/webhooks";
+  const hasShippingDetails = Boolean(
+    form.ordererName.trim() ||
+      form.recipientName.trim() ||
+      form.recipientPhone.trim() ||
+      form.postalCode.trim() ||
+      form.address1.trim() ||
+      form.address2.trim() ||
+      form.memo.trim(),
+  );
 
   useEffect(() => {
     saveCheckoutOrderDraft(form);
@@ -423,6 +462,29 @@ export function CheckoutOrderClient() {
       }));
     }
   }, [composeResult?.bookUid, form.bookUid]);
+
+  useEffect(() => {
+    if (!isDemoDraft || hasShippingDraftContent) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      ...demoOrderPreset,
+    }));
+  }, [hasShippingDraftContent, isDemoDraft]);
+
+  useEffect(() => {
+    if (!isDemoDraft || hasShippingDetails) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      ...demoOrderDraftPreset,
+      bookUid: current.bookUid,
+    }));
+  }, [hasShippingDetails, isDemoDraft]);
 
   useEffect(() => {
     if (!trackingSourceKey || !trackingSourceValue) {
@@ -714,6 +776,10 @@ export function CheckoutOrderClient() {
                 현재 주문 단계는 데모용 여행 초안을 기준으로 이어지고 있습니다. 테스트
                 책 생성으로 bookUid를 만든 뒤 주문 요청과 웹훅 추적까지 한 흐름으로
                 확인할 수 있습니다.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                배송지 입력칸은 데모용 기본값으로 미리 채워 두었습니다. 필요하면 그대로
+                수정해 사용할 수 있습니다.
               </p>
             </div>
             <Link
@@ -1019,6 +1085,13 @@ export function CheckoutOrderClient() {
               bookUid가 있으면 자동으로 채워집니다.
             </p>
           </div>
+
+          {isDemoDraft ? (
+            <div className="mt-5 rounded-[24px] border border-[var(--line)] bg-[linear-gradient(145deg,_rgba(255,255,255,0.92),_rgba(247,240,231,0.84))] px-5 py-4 text-sm leading-6 text-slate-700">
+              샘플 초안 세션이라 배송지 예시를 미리 채워두었습니다. 실제 테스트 전에는
+              필요한 값으로 바로 수정할 수 있습니다.
+            </div>
+          ) : null}
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             {checkoutFields.map((field) => {
