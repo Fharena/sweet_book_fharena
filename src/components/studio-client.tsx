@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ChangeEvent,
+} from "react";
 
 import type {
   CheckoutComposeResult,
@@ -65,6 +72,12 @@ type OrderPayload = {
   externalRef?: string;
 };
 
+type SelectedUploadFile = {
+  key: string;
+  file: File;
+  displayName: string;
+};
+
 const studioSteps: Array<{
   id: StudioStepId;
   index: number;
@@ -121,6 +134,14 @@ const emptyOrderDraft: CheckoutOrderDraft = {
   memo: "",
 };
 
+const initialStepRefs: Record<StudioStepId, HTMLElement | null> = {
+  trip: null,
+  upload: null,
+  review: null,
+  preview: null,
+  publish: null,
+};
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -175,20 +196,69 @@ function getRequestedStep(value: string | null): StudioStepId | null {
   }
 }
 
-function buildPreviewUrl(file: File) {
-  return URL.createObjectURL(file);
-}
-
 function getFileKey(file: File) {
-  return `${file.name}:${file.size}`;
+  return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
 function isAcceptedImageFile(file: File) {
-  if (file.type.startsWith("image/")) {
-    return true;
+  return file.size > 0;
+}
+
+function getFallbackImageExtension(file: File) {
+  if (file.type === "image/png") {
+    return ".png";
   }
 
-  return /\.(avif|bmp|gif|heic|heif|jpeg|jpg|png|tiff|webp)$/i.test(file.name);
+  if (file.type === "image/webp") {
+    return ".webp";
+  }
+
+  if (file.type === "image/heic") {
+    return ".heic";
+  }
+
+  if (file.type === "image/heif") {
+    return ".heif";
+  }
+
+  return ".jpg";
+}
+
+function normalizeSelectedFile(file: File, index: number) {
+  const normalizedName =
+    file.name.trim() ||
+    `mobile-photo-${Date.now()}-${index + 1}${getFallbackImageExtension(file)}`;
+  const normalizedFile =
+    normalizedName === file.name
+      ? file
+      : new File([file], normalizedName, {
+          type: file.type || "image/jpeg",
+          lastModified: file.lastModified,
+        });
+
+  return {
+    key: getFileKey(normalizedFile),
+    file: normalizedFile,
+    displayName: normalizedName,
+  } satisfies SelectedUploadFile;
+}
+
+function formatSelectionTimestamp(value: string | null) {
+  if (!value) {
+    return "방금 선택";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "방금 선택";
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function buildOrderPayload(draft: CheckoutOrderDraft): OrderPayload {
@@ -448,8 +518,10 @@ export function StudioClient() {
   const searchParams = useSearchParams();
   const { draft } = useTripDraft();
   const topRef = useRef<HTMLDivElement | null>(null);
+  const stepRefs = useRef<Record<StudioStepId, HTMLElement | null>>(initialStepRefs);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
+  const [selectedUploads, setSelectedUploads] = useState<SelectedUploadFile[]>([]);
+  const [lastSelectedAt, setLastSelectedAt] = useState<string | null>(null);
   const [tripName, setTripName] = useState("새 여행");
   const [travelStart, setTravelStart] = useState("");
   const [travelEnd, setTravelEnd] = useState("");
@@ -471,21 +543,10 @@ export function StudioClient() {
   const [isOrdering, setIsOrdering] = useState(false);
   const [, startTransition] = useTransition();
 
-  const previewFiles = useMemo(
-    () =>
-      files.map((file) => ({
-        key: getFileKey(file),
-        file,
-        preview: buildPreviewUrl(file),
-      })),
-    [files],
+  const files = useMemo(
+    () => selectedUploads.map((item) => item.file),
+    [selectedUploads],
   );
-
-  useEffect(() => {
-    return () => {
-      previewFiles.forEach((item) => URL.revokeObjectURL(item.preview));
-    };
-  }, [previewFiles]);
 
   useEffect(() => {
     setComposeResult(loadCheckoutComposeResult());
@@ -544,8 +605,8 @@ export function StudioClient() {
   const isDemoSession = isDemoTripDraft(draft);
   const resolvedTheme = resolveTravelTheme(draft?.selectedThemeId);
   const totalUploadSize = useMemo(
-    () => files.reduce((sum, file) => sum + file.size, 0),
-    [files],
+    () => selectedUploads.reduce((sum, item) => sum + item.file.size, 0),
+    [selectedUploads],
   );
   const draftPhotoById = useMemo(
     () => new Map((draft?.photos ?? []).map((photo) => [photo.id, photo])),
@@ -584,33 +645,46 @@ export function StudioClient() {
   const canOpenPreview = Boolean(draft?.chapters.length);
   const canOpenPublish = Boolean(draft?.photos.length);
 
+  function scrollToStep(step: StudioStepId) {
+    const section = stepRefs.current[step] ?? topRef.current;
+    section?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function moveToStep(step: StudioStepId) {
     setActiveStep(step);
-    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        scrollToStep(step);
+      });
+    }
+  }
+
+  function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+
+    if (nextFiles.length === 0) {
+      return;
+    }
+
+    handleSelectFiles(nextFiles);
   }
 
   function handleSelectFiles(nextFiles: FileList | File[]) {
     const accepted = Array.from(nextFiles).filter(isAcceptedImageFile);
     if (accepted.length === 0) {
-      setUploadError("이미지 파일만 선택할 수 있습니다. 갤러리에서 원본 사진을 다시 골라 주세요.");
+      setUploadError("선택된 파일을 읽지 못했습니다. 갤러리에서 다시 골라 주세요.");
       return;
     }
 
-    setFiles((current) => {
-      const seen = new Set(current.map((file) => getFileKey(file)));
-      const merged = [...current];
+    const selectedAt = new Date().toISOString();
 
-      for (const file of accepted) {
-        const key = getFileKey(file);
-        if (!seen.has(key)) {
-          merged.push(file);
-          seen.add(key);
-        }
-      }
-
-      return merged;
-    });
+    setSelectedUploads(
+      accepted.map((file, index) => normalizeSelectedFile(file, index)),
+    );
+    setLastSelectedAt(selectedAt);
     setUploadError(null);
+    moveToStep("upload");
   }
 
   async function handleUpload() {
@@ -629,7 +703,7 @@ export function StudioClient() {
     }
 
     const formData = new FormData();
-    files.forEach((file) => formData.append("files", file));
+    selectedUploads.forEach((item) => formData.append("files", item.file));
     formData.append("tripName", tripName.trim());
     formData.append("travelStart", travelStart);
     formData.append("travelEnd", travelEnd);
@@ -675,7 +749,8 @@ export function StudioClient() {
     setComposeResult(null);
     setOrderResult(null);
     setOrderDraft(emptyOrderDraft);
-    setFiles([]);
+    setSelectedUploads([]);
+    setLastSelectedAt(null);
     setReviewFeedback("샘플 초안을 불러왔습니다. 실제 플로우를 바로 확인할 수 있습니다.");
     moveToStep("review");
   }
@@ -685,7 +760,8 @@ export function StudioClient() {
     clearCheckoutComposeResult();
     clearCheckoutOrderDraft();
     clearCheckoutOrderResult();
-    setFiles([]);
+    setSelectedUploads([]);
+    setLastSelectedAt(null);
     setComposeResult(null);
     setOrderResult(null);
     setOrderDraft(emptyOrderDraft);
@@ -946,7 +1022,12 @@ export function StudioClient() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.42fr)_minmax(290px,0.78fr)]">
           <main className="space-y-6">
-            <section className={`studio-card rounded-[32px] p-6 ${activeStep === "trip" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}>
+            <section
+              ref={(node) => {
+                stepRefs.current.trip = node;
+              }}
+              className={`studio-card rounded-[32px] p-6 ${activeStep === "trip" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+            >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1013,7 +1094,12 @@ export function StudioClient() {
               </div>
             </section>
 
-            <section className={`studio-card rounded-[32px] p-6 ${activeStep === "upload" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}>
+            <section
+              ref={(node) => {
+                stepRefs.current.upload = node;
+              }}
+              className={`studio-card rounded-[32px] p-6 ${activeStep === "upload" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+            >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1038,7 +1124,7 @@ export function StudioClient() {
                     type="button"
                     className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={handleUpload}
-                    disabled={isUploading}
+                    disabled={isUploading || selectedUploads.length === 0}
                   >
                     {isUploading ? "사진 정리 중..." : "사진 읽고 다음 단계로"}
                   </button>
@@ -1068,16 +1154,30 @@ export function StudioClient() {
                     ref={fileInputRef}
                     id="studio-photo-picker"
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
                     multiple
                     className="sr-only"
-                    onChange={(event) => {
-                      if (event.target.files) {
-                        handleSelectFiles(event.target.files);
-                      }
-                      event.currentTarget.value = "";
-                    }}
+                    onChange={handleFileInputChange}
                   />
+
+                  <div className="rounded-[26px] border border-[var(--line)] bg-white px-4 py-4">
+                    <label
+                      htmlFor="studio-photo-picker"
+                      className="mb-3 block text-sm font-semibold text-slate-900"
+                    >
+                      사진 선택기
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                      multiple
+                      className="block w-full rounded-[18px] border border-[var(--line)] bg-white px-3 py-3 text-sm text-slate-700 file:mr-4 file:rounded-full file:border-0 file:bg-[var(--accent-soft)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[var(--accent)]"
+                      onChange={handleFileInputChange}
+                    />
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                      모바일에서 위 기본 선택기가 가장 안정적입니다. 큰 카드 영역을 눌러도 같은 선택기가 열립니다.
+                    </p>
+                  </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
@@ -1087,27 +1187,54 @@ export function StudioClient() {
                     >
                       사진 다시 고르기
                     </button>
-                    {previewFiles.length > 0 ? (
+                    {selectedUploads.length > 0 ? (
                       <span className="rounded-full bg-[var(--accent-soft)] px-4 py-3 text-sm font-semibold text-[var(--accent)]">
-                        {previewFiles.length}장 선택됨
+                        {selectedUploads.length}장 선택됨
                       </span>
                     ) : null}
                   </div>
 
-                  {previewFiles.length > 0 ? (
+                  {selectedUploads.length > 0 ? (
                     <div className="space-y-4">
                       <div className="rounded-[24px] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-4 py-3 text-sm text-slate-700">
-                        사진이 선택되면 아래 목록과 썸네일이 바로 보여야 정상입니다. 이 목록이 보이면 다음 버튼으로 업로드를 진행할 수 있습니다.
+                        사진이 선택되면 아래 목록이 바로 보여야 정상입니다. 이 목록이 보이면 다음 버튼으로 업로드를 진행할 수 있습니다.
+                      </div>
+                      <div className="rounded-[24px] border border-[var(--line)] bg-white px-4 py-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              최근 선택
+                            </p>
+                            <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                              {formatSelectionTimestamp(lastSelectedAt)}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-[var(--accent-soft)] px-4 py-2 text-sm font-semibold text-[var(--accent)]">
+                            총 {selectedUploads.length}장 / {formatBytes(totalUploadSize)}
+                          </span>
+                        </div>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {previewFiles.map((item) => (
+                        {selectedUploads.map((item) => (
                           <div key={item.key} className="overflow-hidden rounded-[26px] border border-[var(--line)] bg-white">
-                            <img src={item.preview} alt={item.file.name} className="h-44 w-full object-cover" />
+                            <div className="flex h-44 items-end bg-[linear-gradient(160deg,_rgba(15,23,42,0.92),_rgba(15,118,110,0.52))] p-4 text-white">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                                  선택된 사진
+                                </p>
+                                <p className="mt-2 line-clamp-2 text-lg font-semibold tracking-[-0.03em]">
+                                  {item.displayName}
+                                </p>
+                              </div>
+                            </div>
                             <div className="px-4 py-4">
                               <p className="truncate text-sm font-semibold text-slate-900">
-                                {item.file.name}
+                                {item.displayName}
                               </p>
-                              <p className="mt-1 text-xs text-slate-500">{formatBytes(item.file.size)}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {formatBytes(item.file.size)}
+                                {item.file.type ? ` · ${item.file.type}` : ""}
+                              </p>
                             </div>
                           </div>
                         ))}
@@ -1117,13 +1244,13 @@ export function StudioClient() {
                           선택한 파일 목록
                         </p>
                         <div className="mt-3 grid gap-2">
-                          {previewFiles.map((item, index) => (
+                          {selectedUploads.map((item, index) => (
                             <div
                               key={`name-${item.key}`}
                               className="flex items-center justify-between gap-3 rounded-[18px] bg-slate-50 px-3 py-2 text-sm text-slate-700"
                             >
                               <span className="min-w-0 truncate">
-                                {index + 1}. {item.file.name}
+                                {index + 1}. {item.displayName}
                               </span>
                               <span className="shrink-0 text-xs text-slate-500">
                                 {formatBytes(item.file.size)}
@@ -1140,11 +1267,25 @@ export function StudioClient() {
                       {uploadError}
                     </div>
                   ) : null}
+                  {reviewFeedback && draft ? (
+                    <div className="rounded-[24px] border border-[rgba(15,118,110,0.2)] bg-[rgba(15,118,110,0.08)] px-5 py-4 text-sm text-slate-700">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span>{reviewFeedback}</span>
+                        <button
+                          type="button"
+                          className="rounded-full border border-[rgba(15,118,110,0.2)] bg-white px-3 py-1 text-xs font-semibold text-[var(--accent)]"
+                          onClick={() => moveToStep("review")}
+                        >
+                          검토 결과 보기
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="grid gap-3">
-                  {[
-                    ["선택한 사진", `${files.length}장`],
+                  {[ 
+                    ["선택한 사진", `${selectedUploads.length}장`],
                     ["총 용량", formatBytes(totalUploadSize)],
                     ["현재 테마", resolvedTheme.name],
                   ].map(([label, value]) => (
@@ -1169,7 +1310,12 @@ export function StudioClient() {
               </div>
             </section>
 
-            <section className={`studio-card rounded-[32px] p-6 ${activeStep === "review" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}>
+            <section
+              ref={(node) => {
+                stepRefs.current.review = node;
+              }}
+              className={`studio-card rounded-[32px] p-6 ${activeStep === "review" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+            >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1350,7 +1496,12 @@ export function StudioClient() {
                 </div>
               )}
             </section>
-            <section className={`studio-card rounded-[32px] p-6 ${activeStep === "preview" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}>
+            <section
+              ref={(node) => {
+                stepRefs.current.preview = node;
+              }}
+              className={`studio-card rounded-[32px] p-6 ${activeStep === "preview" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+            >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1497,7 +1648,12 @@ export function StudioClient() {
               )}
             </section>
 
-            <section className={`studio-card rounded-[32px] p-6 ${activeStep === "publish" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}>
+            <section
+              ref={(node) => {
+                stepRefs.current.publish = node;
+              }}
+              className={`studio-card rounded-[32px] p-6 ${activeStep === "publish" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+            >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
