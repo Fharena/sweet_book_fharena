@@ -10,6 +10,7 @@
 - [ ] README에 프로젝트 소개와 실행 방법이 정리되어 있다
 - [ ] README에 샘플 여행 초안 빠른 재현 경로가 정리되어 있다
 - [ ] 홈(`/`) 또는 업로드(`/trips/new`)에서 샘플 초안 버튼이 실제로 보인다
+- [ ] 홈(`/`) 또는 업로드(`/trips/new`)에서 `백엔드 상태` 카드가 실제로 보인다
 - [ ] 데모 스크립트가 문서로 준비되어 있다
 - [ ] 운영/주문 확인 런북이 문서로 준비되어 있다
 
@@ -19,6 +20,7 @@
 - [ ] 로컬 `.env`에 `SWEETBOOK_API_KEY`가 설정되어 있다
 - [ ] `SWEETBOOK_ENV`가 `sandbox` 또는 제출용 값으로 맞춰져 있다
 - [ ] `SWEETBOOK_WEBHOOK_SECRET`가 설정되어 있다
+- [ ] `/api/sweetbook/status`에서 API Key, Book Specs, Webhook 상태가 정상으로 보인다
 - [ ] 실제 비밀값이 README, PR 본문, 커밋 메시지에 노출되지 않았다
 
 ## 기능 확인

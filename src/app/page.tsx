@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppShell } from "@/components/app-shell";
+import { BackendHealthCard } from "@/components/backend-health-card";
 import { DemoTripLauncher } from "@/components/demo-trip-launcher";
 import { previewThemes, timelineGroups, tripSummary } from "@/lib/mock-trip";
 
@@ -52,6 +53,8 @@ export default function Home() {
               ))}
             </div>
           </div>
+
+          <BackendHealthCard title="첫 진입 기준 백엔드 상태" compact />
         </div>
       }
     >

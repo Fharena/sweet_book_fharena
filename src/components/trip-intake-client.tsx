@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { BackendHealthCard } from "@/components/backend-health-card";
 import { DemoTripLauncher } from "@/components/demo-trip-launcher";
 import { tripSummary } from "@/lib/mock-trip";
 import { clearTripDraft, saveTripDraft } from "@/lib/trip-draft";
@@ -349,6 +350,8 @@ export function TripIntakeClient() {
               ))}
             </div>
           </div>
+
+          <BackendHealthCard title="업로드 전 백엔드 상태" compact />
         </div>
       }
     >
