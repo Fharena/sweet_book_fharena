@@ -99,6 +99,14 @@ npm run dev
 
 - `/ops/webhooks`: Sweetbook 웹훅 등록, 테스트 전송, delivery 이력 조회, 수신 로그 확인
 - `/checkout`: 테스트 책 생성, 주문 요청, orderUid 또는 bookUid 기준 수신 추적
+- `/api/sweetbook/status`: API Key, Book Specs 연결, 웹훅 설정 여부를 점검하는 상태 API
+
+홈, 업로드, 운영 화면 우측에는 위 상태 API를 읽는 `백엔드 상태` 카드가 들어 있습니다.
+처음 실행할 때는 이 카드부터 보고 아래 항목이 살아 있는지 확인하면 됩니다.
+- Sweetbook 환경이 sandbox인지
+- API Key가 서버에 설정되어 있는지
+- `book-specs`가 실제로 조회되는지
+- 웹훅 설정이 이미 연결되어 있는지
 
 이 화면은 운영 전환 전에 아래 항목을 빠르게 검증하기 위한 용도입니다.
 - 웹훅 URL 등록 상태
