@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { BackendHealthCard } from "@/components/backend-health-card";
 import { DemoTripLauncher } from "@/components/demo-trip-launcher";
 import { isDemoTripDraft } from "@/lib/demo-trip-draft";
 import { orderSummary } from "@/lib/mock-trip";
@@ -24,11 +25,9 @@ import {
   saveCheckoutOrderDraft,
   saveCheckoutOrderResult,
 } from "@/lib/checkout-order";
+import { estimateRequestedTravelPages } from "@/lib/sweetbook-book-specs";
 import { resolveTravelTheme } from "@/lib/travel-themes";
-
-function derivePrice(pageCount: number) {
-  return Math.round(16800 + pageCount * 330);
-}
+import { useSweetbookProductMeta } from "@/lib/use-sweetbook-product-meta";
 
 function formatCurrency(value: number | null) {
   if (value === null) {
@@ -99,6 +98,35 @@ type TrackingReceiptPayload = {
   error?: string;
 };
 
+type PlanPreviewPayload = {
+  title: string;
+  subtitle: string;
+  dateRange: string;
+  bookSpecUid: string;
+  themeLabel: string;
+  totalOperationCount: number;
+  operationCounts: {
+    cover: number;
+    divider: number;
+    content: number;
+    publish: number;
+  };
+  operations: Array<{
+    kind: string;
+    templateUid: string;
+    photoCount: number;
+  }>;
+};
+
+type BookSpecPreview = {
+  uid: string;
+  label: string;
+  detail: string | null;
+  minPageCount: number | null;
+  maxPageCount: number | null;
+  pageStep: number | null;
+};
+
 const trackedEventMeta: Record<
   string,
   {
@@ -158,6 +186,141 @@ function formatDateTime(value: string | null | undefined) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function pickString(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function pickNumber(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function normalizePlanPreview(payload: unknown): PlanPreviewPayload | null {
+  if (!isObject(payload)) {
+    return null;
+  }
+
+  const operations = Array.isArray(payload.operations)
+    ? payload.operations.filter(isObject).map((operation) => ({
+        kind:
+          typeof operation.kind === "string" && operation.kind.trim()
+            ? operation.kind.trim()
+            : "unknown",
+        templateUid:
+          typeof operation.templateUid === "string" && operation.templateUid.trim()
+            ? operation.templateUid.trim()
+            : "-",
+        photoCount: Array.isArray(operation.photoIds) ? operation.photoIds.length : 0,
+      }))
+    : [];
+
+  return {
+    title: typeof payload.title === "string" ? payload.title : "여행 포토북",
+    subtitle: typeof payload.subtitle === "string" ? payload.subtitle : "",
+    dateRange: typeof payload.dateRange === "string" ? payload.dateRange : "",
+    bookSpecUid:
+      typeof payload.bookSpecUid === "string" ? payload.bookSpecUid : "미확인",
+    themeLabel:
+      typeof payload.themeLabel === "string" ? payload.themeLabel : "미확인",
+    totalOperationCount: operations.length,
+    operationCounts: {
+      cover: operations.filter((operation) => operation.kind === "cover").length,
+      divider: operations.filter((operation) => operation.kind === "divider").length,
+      content: operations.filter((operation) => operation.kind === "content").length,
+      publish: operations.filter((operation) => operation.kind === "publish").length,
+    },
+    operations,
+  };
+}
+
+function collectSpecCandidates(payload: unknown) {
+  if (Array.isArray(payload)) {
+    return payload.filter(isObject);
+  }
+
+  if (!isObject(payload)) {
+    return [];
+  }
+
+  const queue: unknown[] = [
+    payload.items,
+    payload.bookSpecs,
+    payload.results,
+    payload.data,
+    isObject(payload.data) ? payload.data.items : null,
+    isObject(payload.data) ? payload.data.bookSpecs : null,
+    isObject(payload.data) ? payload.data.results : null,
+  ];
+
+  return queue.flatMap((entry) =>
+    Array.isArray(entry) ? entry.filter(isObject) : [],
+  );
+}
+
+function normalizeBookSpecPreview(payload: unknown, bookSpecUid: string) {
+  const matched = collectSpecCandidates(payload).find((candidate) => {
+    const candidateUid = pickString(candidate, [
+      "bookSpecUid",
+      "uid",
+      "specUid",
+      "productUid",
+    ]);
+
+    return candidateUid === bookSpecUid;
+  });
+
+  if (!matched) {
+    return null;
+  }
+
+  const detail = [
+    pickString(matched, [
+      "bookSizeName",
+      "sizeDisplayName",
+      "productName",
+      "displayName",
+    ]),
+    pickString(matched, [
+      "bindingTypeName",
+      "bindingType",
+      "coverTypeName",
+      "coverType",
+    ]),
+  ].filter(Boolean);
+
+  return {
+    uid: bookSpecUid,
+    label:
+      pickString(matched, ["label", "name", "title", "displayName"]) ?? bookSpecUid,
+    detail: detail.length ? detail.join(" / ") : null,
+    minPageCount: pickNumber(matched, ["minPageCount", "minPages", "minimumPageCount"]),
+    maxPageCount: pickNumber(matched, ["maxPageCount", "maxPages", "maximumPageCount"]),
+    pageStep: pickNumber(matched, [
+      "pageStep",
+      "pageMultiple",
+      "pageIncrement",
+      "pageCountStep",
+    ]),
+  } satisfies BookSpecPreview;
 }
 
 function resolveTrackingEventMeta(eventType: string | null | undefined) {
@@ -336,12 +499,22 @@ export function CheckoutOrderClient() {
   const photoCount = draft?.stats.totalPhotos ?? 0;
   const chapterCount = draft?.chapters.length ?? orderSummary.chapters;
   const selectedTheme = resolveTravelTheme(draft?.selectedThemeId);
-  const pageCount = draft
-    ? Math.max(24, chapterCount * 6 + Math.ceil(photoCount / 4) * 2)
+  const requestedPageCount = draft
+    ? estimateRequestedTravelPages(photoCount, chapterCount)
     : orderSummary.pages;
-  const estimatedPrice = draft
-    ? formatCurrency(derivePrice(pageCount))
-    : orderSummary.estimatedPrice;
+  const {
+    plan,
+    productLabel,
+    productDimension,
+    pageRuleSummary,
+    coverSummary,
+    pageCount,
+    estimatedPrice: estimatedPriceValue,
+    error: productMetaError,
+    isLoading: isLoadingProductMeta,
+    isNormalizedPageCount,
+  } = useSweetbookProductMeta(draft, requestedPageCount);
+  const estimatedPrice = formatCurrency(estimatedPriceValue);
   const resolvedLocationCount = draft?.stats.withResolvedLocation ?? 0;
   const gpsPhotoCount = draft?.stats.withGpsCoordinates ?? 0;
   const manualTaggingCount = draft?.stats.manualTaggingRequired ?? 0;
@@ -376,6 +549,11 @@ export function CheckoutOrderClient() {
   const [orderResult, setOrderResult] = useState<CheckoutOrderResult | null>(() =>
     loadCheckoutOrderResult(),
   );
+  const [planPreview, setPlanPreview] = useState<PlanPreviewPayload | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [isLoadingPlan, setIsLoadingPlan] = useState(false);
+  const [planRefreshToken, setPlanRefreshToken] = useState(0);
+  const [bookSpecPreview, setBookSpecPreview] = useState<BookSpecPreview | null>(null);
   const [trackingState, setTrackingState] = useState<TrackingReceiptPayload | null>(null);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
@@ -493,6 +671,83 @@ export function CheckoutOrderClient() {
       bookUid: current.bookUid,
     }));
   }, [hasShippingDetails, isDemoDraft]);
+
+  useEffect(() => {
+    if (!draft) {
+      setPlanPreview(null);
+      setBookSpecPreview(null);
+      setPlanError(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadPlanPreview() {
+      setIsLoadingPlan(true);
+      setPlanError(null);
+
+      try {
+        const planResponse = await fetch("/api/sweetbook/books/plan", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(draft),
+        });
+
+        const planPayload = (await planResponse.json()) as {
+          error?: string;
+        } & Record<string, unknown>;
+
+        if (!planResponse.ok) {
+          throw new Error(planPayload.error ?? "서버 조립 계획을 불러오지 못했습니다.");
+        }
+
+        const nextPlanPreview = normalizePlanPreview(planPayload);
+        if (!nextPlanPreview) {
+          throw new Error("서버 조립 계획 형식을 해석하지 못했습니다.");
+        }
+
+        let nextBookSpecPreview: BookSpecPreview | null = null;
+        const specResponse = await fetch("/api/sweetbook/book-specs", {
+          cache: "no-store",
+        });
+
+        if (specResponse.ok) {
+          const specPayload = (await specResponse.json()) as unknown;
+          nextBookSpecPreview = normalizeBookSpecPreview(
+            specPayload,
+            nextPlanPreview.bookSpecUid,
+          );
+        }
+
+        if (!isCancelled) {
+          setPlanPreview(nextPlanPreview);
+          setBookSpecPreview(nextBookSpecPreview);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setPlanError(
+            error instanceof Error
+              ? error.message
+              : "서버 조립 계획을 읽는 중 오류가 발생했습니다.",
+          );
+          setPlanPreview(null);
+          setBookSpecPreview(null);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingPlan(false);
+        }
+      }
+    }
+
+    void loadPlanPreview();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [draft, planRefreshToken]);
 
   useEffect(() => {
     if (!trackingSourceKey || !trackingSourceValue) {
@@ -759,6 +1014,8 @@ export function CheckoutOrderClient() {
               </p>
             ) : null}
           </div>
+
+          <BackendHealthCard title="주문 전 백엔드 상태" compact />
         </div>
       }
     >
@@ -807,7 +1064,9 @@ export function CheckoutOrderClient() {
             <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
               <p>
                 <span className="font-semibold text-slate-900">상품:</span>{" "}
-                {draft ? `${draft.tripName} 여행 포토북` : orderSummary.product}
+                {draft
+                  ? `${draft.tripName} / ${productLabel}`
+                  : `${orderSummary.product} / ${productLabel}`}
               </p>
               <p>
                 <span className="font-semibold text-slate-900">예상 페이지:</span> {pageCount}
@@ -825,6 +1084,10 @@ export function CheckoutOrderClient() {
                 {selectedTheme.name}
               </p>
               <p>
+                <span className="font-semibold text-slate-900">상품 규칙:</span>{" "}
+                {pageRuleSummary}
+              </p>
+              <p>
                 <span className="font-semibold text-slate-900">최종화된 bookUid:</span>{" "}
                 {form.bookUid.trim() ? form.bookUid : "아직 없습니다"}
               </p>
@@ -840,10 +1103,45 @@ export function CheckoutOrderClient() {
                 <p className="mt-2 text-2xl font-semibold text-slate-900">{estimatedPrice}</p>
               </div>
               <div className="metric-tile px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">패턴</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{selectedTheme.name}</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">상품 규격</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{productLabel}</p>
               </div>
             </div>
+
+            <div className="mt-5 rounded-[24px] border border-[var(--line)] bg-white/82 px-4 py-4 text-sm leading-6 text-slate-700">
+              <p>
+                <span className="font-semibold text-slate-900">규격:</span> {productDimension}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">제본:</span> {coverSummary}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">페이지 규칙:</span>{" "}
+                {pageRuleSummary}
+              </p>
+              {isNormalizedPageCount ? (
+                <p>
+                  <span className="font-semibold text-slate-900">보정:</span> 요청 분량을
+                  상품 규칙에 맞게 {pageCount}p로 맞췄습니다.
+                </p>
+              ) : null}
+              {plan ? (
+                <p>
+                  <span className="font-semibold text-slate-900">조립 계획:</span>{" "}
+                  {plan.operations.length}개 단계
+                </p>
+              ) : null}
+            </div>
+            {productMetaError ? (
+              <div className="mt-4 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
+                {productMetaError}
+              </div>
+            ) : null}
+            {isLoadingProductMeta ? (
+              <div className="mt-4 rounded-[24px] border border-[var(--line)] bg-white/78 px-5 py-4 text-sm leading-6 text-slate-600">
+                Sweetbook 상품 규격과 조립 계획을 동기화하는 중입니다.
+              </div>
+            ) : null}
 
             <button
               type="button"
@@ -878,6 +1176,163 @@ export function CheckoutOrderClient() {
             {composeError ? (
               <div className="mt-4 rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm leading-6 text-rose-700">
                 {composeError}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="soft-card rounded-[28px] p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="section-kicker">서버 조립 계획</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  현재 여행 draft를 서버 route로 보내 실제 Sweetbook 조립 계획을 계산한
+                  결과입니다. 제출 때 백엔드가 어떤 책 구조를 만드는지 설명하는 기준으로
+                  쓸 수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400"
+                onClick={() => setPlanRefreshToken((current) => current + 1)}
+                disabled={isLoadingPlan || !draft}
+              >
+                {isLoadingPlan ? "계획 계산 중..." : "계획 새로고침"}
+              </button>
+            </div>
+
+            {planPreview ? (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-[24px] border border-[var(--line)] bg-[linear-gradient(145deg,_rgba(255,255,255,0.94),_rgba(247,240,231,0.84))] px-5 py-4 text-sm leading-6 text-slate-700">
+                  <p>
+                    <span className="font-semibold text-slate-900">책 제목:</span>{" "}
+                    {planPreview.title}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">서브타이틀:</span>{" "}
+                    {planPreview.subtitle}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">테마 레이블:</span>{" "}
+                    {planPreview.themeLabel}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-900">규격:</span>{" "}
+                    {bookSpecPreview?.label ?? planPreview.bookSpecUid}
+                  </p>
+                  {bookSpecPreview?.detail ? (
+                    <p>
+                      <span className="font-semibold text-slate-900">규격 상세:</span>{" "}
+                      {bookSpecPreview.detail}
+                    </p>
+                  ) : null}
+                  <p>
+                    <span className="font-semibold text-slate-900">여행 기간:</span>{" "}
+                    {planPreview.dateRange}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    ["전체 단계", planPreview.totalOperationCount, "cover + divider + content + publish"],
+                    ["표지", planPreview.operationCounts.cover, "처음 한 번 적용"],
+                    ["챕터 분리", planPreview.operationCounts.divider, "장소/날짜 오프너 페이지"],
+                    ["내지/출판", `${planPreview.operationCounts.content} / ${planPreview.operationCounts.publish}`, "본문과 publish 템플릿 수"],
+                  ].map(([label, value, note]) => (
+                    <div
+                      key={String(label)}
+                      className="rounded-[24px] border border-[var(--line)] bg-white/82 px-4 py-4"
+                    >
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                        {label}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{note}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {bookSpecPreview ? (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">최소 페이지</p>
+                      <p className="mt-2 text-xl font-semibold text-slate-900">
+                        {bookSpecPreview.minPageCount ?? "미확인"}
+                      </p>
+                    </div>
+                    <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">최대 페이지</p>
+                      <p className="mt-2 text-xl font-semibold text-slate-900">
+                        {bookSpecPreview.maxPageCount ?? "미확인"}
+                      </p>
+                    </div>
+                    <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500">증가 단위</p>
+                      <p className="mt-2 text-xl font-semibold text-slate-900">
+                        {bookSpecPreview.pageStep ?? "미확인"}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                  <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-5 py-4">
+                    <p className="text-sm font-semibold text-slate-900">챕터 기준 미리보기</p>
+                    <div className="mt-3 space-y-3">
+                      {draft?.chapters.slice(0, 4).map((chapter, index) => (
+                        <div
+                          key={chapter.id}
+                          className="rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.78)] px-4 py-3"
+                        >
+                          <p className="text-sm font-semibold text-slate-900">
+                            {index + 1}. {chapter.title}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+                            {chapter.dayLabel} / {chapter.placeLabel}
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">
+                            사진 {chapter.photoCount}장, 위치 소스 {chapter.locationSource}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-5 py-4">
+                    <p className="text-sm font-semibold text-slate-900">템플릿 실행 순서</p>
+                    <div className="mt-3 space-y-3">
+                      {planPreview.operations.slice(0, 6).map((operation, index) => (
+                        <div
+                          key={`${operation.templateUid}-${index}`}
+                          className="rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.78)] px-4 py-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-900">
+                              {index + 1}. {operation.kind}
+                            </p>
+                            <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                              사진 {operation.photoCount}장
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                            templateUid / {operation.templateUid}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {isLoadingPlan && !planPreview ? (
+              <div className="mt-4 rounded-[24px] border border-[var(--line)] bg-white/78 px-5 py-4 text-sm leading-6 text-slate-600">
+                현재 여행 초안을 기준으로 서버 조립 계획을 계산하는 중입니다.
+              </div>
+            ) : null}
+
+            {planError ? (
+              <div className="mt-4 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
+                {planError}
               </div>
             ) : null}
           </div>

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { BackendHealthCard } from "@/components/backend-health-card";
 import { WebhookOpsClient } from "@/components/webhook-ops-client";
 
 export default function WebhookOpsPage() {
@@ -60,6 +61,8 @@ export default function WebhookOpsPage() {
               ))}
             </div>
           </article>
+
+          <BackendHealthCard title="운영 기준 백엔드 상태" compact />
         </div>
       }
     >

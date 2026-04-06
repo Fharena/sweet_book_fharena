@@ -7,10 +7,13 @@ import { AppShell } from "@/components/app-shell";
 import { DemoTripLauncher } from "@/components/demo-trip-launcher";
 import { isDemoTripDraft } from "@/lib/demo-trip-draft";
 import { timelineGroups } from "@/lib/mock-trip";
+import { travelPhotobookPreset } from "@/lib/sweetbook-catalog";
+import { estimateRequestedTravelPages } from "@/lib/sweetbook-book-specs";
 import {
   applyThemeSelectionToDraft,
   saveTripDraft,
 } from "@/lib/trip-draft";
+import { useSweetbookProductMeta } from "@/lib/use-sweetbook-product-meta";
 import { useTripDraft } from "@/lib/use-trip-draft";
 import {
   DEFAULT_TRAVEL_THEME_ID,
@@ -18,14 +21,6 @@ import {
   travelThemes,
   type TravelThemeId,
 } from "@/lib/travel-themes";
-
-function estimatePages(photoCount: number, chapterCount: number) {
-  return Math.max(24, chapterCount * 6 + Math.ceil(photoCount / 4) * 2);
-}
-
-function estimatePrice(pageCount: number) {
-  return Math.round(16800 + pageCount * 330);
-}
 
 function formatCoordinate(value: number) {
   return value.toFixed(3);
@@ -46,18 +41,25 @@ export default function BookPreviewPage() {
     () => new Map((draft?.photos ?? []).map((photo) => [photo.id, photo])),
     [draft?.photos],
   );
-  const pageCount = estimatePages(
+  const requestedPageCount = estimateRequestedTravelPages(
     draft?.stats.totalPhotos ?? timelineGroups.length * 8,
     chapters.length,
   );
   const isDemoDraft = isDemoTripDraft(draft);
-  const price = estimatePrice(pageCount);
   const selectedThemeId = draft?.selectedThemeId ?? fallbackThemeId;
   const selectedTheme = resolveTravelTheme(selectedThemeId);
-  const selectedThemeIndex = useMemo(
-    () => travelThemes.findIndex((theme) => theme.id === selectedTheme.id),
-    [selectedTheme.id],
-  );
+  const {
+    plan,
+    productLabel,
+    productDimension,
+    pageRuleSummary,
+    coverSummary,
+    pageCount,
+    estimatedPrice,
+    isLoading: isLoadingProductMeta,
+    error: productMetaError,
+    isNormalizedPageCount,
+  } = useSweetbookProductMeta(draft, requestedPageCount);
 
   function handleSelectTheme(themeId: TravelThemeId) {
     setFallbackThemeId(themeId);
@@ -91,19 +93,41 @@ export default function BookPreviewPage() {
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">페이지 수</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">{pageCount}</p>
                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                  챕터 수와 사진 밀도에 따라 자동 산정됩니다.
+                  {isNormalizedPageCount
+                    ? `${pageRuleSummary} 규칙을 반영해 보정했습니다.`
+                    : "챕터 수와 사진 밀도에 따라 자동 산정됩니다."}
                 </p>
               </div>
               <div className="rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 금액</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {price.toLocaleString("ko-KR")}원
+                  {estimatedPrice.toLocaleString("ko-KR")}원
                 </p>
                 <p className="mt-2 text-xs leading-5 text-slate-500">
                   최종화 전 확인용 기준가입니다.
                 </p>
               </div>
             </div>
+          </article>
+
+          <article className="soft-card rounded-[28px] p-5">
+            <p className="section-kicker">Sweetbook 상품 규격</p>
+            <div className="mt-4 rounded-[24px] border border-[var(--line)] bg-white/82 px-4 py-4">
+              <p className="text-lg font-semibold text-slate-900">{productLabel}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                {productDimension} · {coverSummary}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{pageRuleSummary}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                계획 bookSpecUid: {plan?.bookSpecUid ?? travelPhotobookPreset.bookSpecUid}
+              </p>
+            </div>
+            {productMetaError ? (
+              <p className="mt-3 text-xs leading-5 text-amber-700">{productMetaError}</p>
+            ) : null}
+            {isLoadingProductMeta ? (
+              <p className="mt-3 text-xs leading-5 text-slate-500">Sweetbook 규격 동기화 중</p>
+            ) : null}
           </article>
 
           <article className="soft-card rounded-[28px] p-5">
@@ -193,9 +217,9 @@ export default function BookPreviewPage() {
                 </p>
               </div>
               <div className="rounded-[24px] border border-[var(--line)] bg-white/85 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">선택 패턴</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">상품 규격</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {selectedThemeIndex + 1} / 3
+                  {productLabel}
                 </p>
               </div>
             </div>
@@ -206,13 +230,15 @@ export default function BookPreviewPage() {
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 페이지</p>
               <p className="mt-2 text-4xl font-semibold text-slate-900">{pageCount}</p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                챕터 흐름과 사진 수를 기준으로 계산된 전체 분량입니다.
+                {isNormalizedPageCount
+                  ? `${pageRuleSummary} 규칙이 반영된 전체 분량입니다.`
+                  : "챕터 흐름과 사진 수를 기준으로 계산된 전체 분량입니다."}
               </p>
             </div>
             <div className="rounded-[28px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(15,118,110,0.12),_rgba(249,115,82,0.12))] px-5 py-5">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 금액</p>
               <p className="mt-2 text-4xl font-semibold text-slate-900">
-                {price.toLocaleString("ko-KR")}원
+                {estimatedPrice.toLocaleString("ko-KR")}원
               </p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 최종화 전에 확인하는 기준 금액입니다.
@@ -295,7 +321,10 @@ export default function BookPreviewPage() {
               {[
                 ["커버", "1장"],
                 ["스프레드", `${chapters.length}개`],
-                ["상태", draft ? "초안 준비" : "샘플"],
+                [
+                  "상태",
+                  plan ? `${plan.operations.length}개 조립 단계` : draft ? "초안 준비" : "샘플",
+                ],
               ].map(([label, value]) => (
                 <div
                   key={label}
@@ -309,20 +338,22 @@ export default function BookPreviewPage() {
               ))}
             </div>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">디자인 방향</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                {selectedTheme.editorialNote}
-              </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">디자인 방향</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  {selectedTheme.editorialNote}
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Sweetbook 반영</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  {plan
+                    ? `${plan.themeLabel} / ${pageRuleSummary}`
+                    : "선택한 패턴 이름과 챕터 리듬이 책 생성 계획의 메타데이터에 함께 반영됩니다."}
+                </p>
+              </div>
             </div>
-            <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Sweetbook 반영</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                선택한 패턴 이름과 챕터 리듬이 책 생성 계획의 메타데이터에 함께 반영됩니다.
-              </p>
-            </div>
-          </div>
         </article>
 
         <div className="grid gap-4">
