@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -76,6 +77,7 @@ type SelectedUploadFile = {
   key: string;
   file: File;
   displayName: string;
+  previewUrl: string;
 };
 
 const studioSteps: Array<{
@@ -196,12 +198,8 @@ function getRequestedStep(value: string | null): StudioStepId | null {
   }
 }
 
-function getFileKey(file: File) {
-  return `${file.name}:${file.size}:${file.lastModified}`;
-}
-
 function isAcceptedImageFile(file: File) {
-  return file.size > 0;
+  return file.size >= 0;
 }
 
 function getFallbackImageExtension(file: File) {
@@ -225,21 +223,15 @@ function getFallbackImageExtension(file: File) {
 }
 
 function normalizeSelectedFile(file: File, index: number) {
-  const normalizedName =
+  const displayName =
     file.name.trim() ||
     `mobile-photo-${Date.now()}-${index + 1}${getFallbackImageExtension(file)}`;
-  const normalizedFile =
-    normalizedName === file.name
-      ? file
-      : new File([file], normalizedName, {
-          type: file.type || "image/jpeg",
-          lastModified: file.lastModified,
-        });
 
   return {
-    key: getFileKey(normalizedFile),
-    file: normalizedFile,
-    displayName: normalizedName,
+    key: `${displayName}:${file.size}:${file.lastModified}:${index}`,
+    file,
+    displayName,
+    previewUrl: URL.createObjectURL(file),
   } satisfies SelectedUploadFile;
 }
 
@@ -342,7 +334,14 @@ function PhotoSurface({
       className={`relative overflow-hidden rounded-[28px] border border-[rgba(255,255,255,0.35)] bg-[linear-gradient(160deg,_rgba(15,23,42,0.88),_rgba(15,118,110,0.42))] ${className ?? ""}`.trim()}
     >
       {src ? (
-        <img src={src} alt={photo.originalName} className="h-full w-full object-cover" />
+        <Image
+          src={src}
+          alt={photo.originalName}
+          fill
+          unoptimized
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          className="object-cover"
+        />
       ) : (
         <div className="flex h-full min-h-[12rem] items-end bg-[linear-gradient(160deg,_rgba(15,23,42,0.88),_rgba(15,118,110,0.42))] p-4 text-white">
           <div>
@@ -549,6 +548,14 @@ export function StudioClient() {
   );
 
   useEffect(() => {
+    return () => {
+      selectedUploads.forEach((item) => {
+        URL.revokeObjectURL(item.previewUrl);
+      });
+    };
+  }, [selectedUploads]);
+
+  useEffect(() => {
     setComposeResult(loadCheckoutComposeResult());
     setOrderResult(loadCheckoutOrderResult());
     setOrderDraft(loadCheckoutOrderDraft() ?? emptyOrderDraft);
@@ -702,8 +709,19 @@ export function StudioClient() {
       return;
     }
 
+    const emptyFiles = selectedUploads.filter((item) => item.file.size === 0);
+    if (emptyFiles.length > 0) {
+      setUploadError(
+        "선택한 사진 중 일부가 실제 파일 데이터 없이 들어왔습니다. 갤러리에서 원본 파일로 다시 골라 주세요.",
+      );
+      moveToStep("upload");
+      return;
+    }
+
     const formData = new FormData();
-    selectedUploads.forEach((item) => formData.append("files", item.file));
+    selectedUploads.forEach((item) =>
+      formData.append("files", item.file, item.displayName),
+    );
     formData.append("tripName", tripName.trim());
     formData.append("travelStart", travelStart);
     formData.append("travelEnd", travelEnd);
@@ -915,11 +933,81 @@ export function StudioClient() {
 
   const currentStepIndex =
     studioSteps.find((step) => step.id === activeStep)?.index ?? studioSteps[0].index;
+  const currentStepPosition = studioSteps.findIndex((step) => step.id === activeStep);
+  const currentStepMeta = studioSteps[currentStepPosition] ?? studioSteps[0];
+  const previousStep = currentStepPosition > 0 ? studioSteps[currentStepPosition - 1] : null;
+
+  function isStepAvailable(stepId: StudioStepId) {
+    switch (stepId) {
+      case "trip":
+      case "upload":
+        return true;
+      case "review":
+        return canOpenReview;
+      case "preview":
+        return canOpenPreview;
+      case "publish":
+        return canOpenPublish;
+      default:
+        return false;
+    }
+  }
+
+  function getStepPanelClass(stepId: StudioStepId) {
+    return `wizard-stage studio-card rounded-[30px] p-5 sm:p-6 ${activeStep === stepId ? "is-active ring-1 ring-[rgba(15,118,110,0.2)]" : ""}`;
+  }
+
+  const mobilePrimaryAction = (() => {
+    switch (activeStep) {
+      case "trip":
+        return {
+          label: "사진 업로드로",
+          onClick: () => moveToStep("upload"),
+          disabled: false,
+        };
+      case "upload":
+        if (draft) {
+          return {
+            label: "사진 정리 보기",
+            onClick: () => moveToStep("review"),
+            disabled: !canOpenReview,
+          };
+        }
+
+        return {
+          label: isUploading ? "사진 정리 중..." : "사진 읽고 정리하기",
+          onClick: handleUpload,
+          disabled: isUploading || selectedUploads.length === 0,
+        };
+      case "review":
+        return {
+          label: "포토북 디자인으로",
+          onClick: () => moveToStep("preview"),
+          disabled: !canOpenPreview,
+        };
+      case "preview":
+        return {
+          label: "Sweetbook 생성으로",
+          onClick: () => moveToStep("publish"),
+          disabled: !canOpenPublish,
+        };
+      case "publish":
+        return {
+          label: "새 여행 시작",
+          onClick: handleResetAll,
+          disabled: false,
+        };
+      default:
+        return null;
+    }
+  })();
 
   return (
     <div className="relative px-4 py-6 sm:px-6 lg:px-8">
       <div ref={topRef} className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <section className="studio-hero rounded-[36px] border border-white/60 px-6 py-7 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:px-8 sm:py-8">
+        <section
+          className={`studio-hero rounded-[32px] border border-white/70 px-5 py-5 sm:px-8 ${activeStep === "trip" ? "sm:py-8" : "sm:py-6"}`}
+        >
           <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl space-y-5">
               <div className="flex flex-wrap items-center gap-3">
@@ -932,15 +1020,21 @@ export function StudioClient() {
               </div>
 
               <div className="space-y-4">
-                <h1 className="max-w-3xl text-[clamp(2.4rem,5vw,4.9rem)] font-semibold tracking-[-0.06em] text-slate-950">
-                  사진을 올리면 날짜와 장소 흐름을 정리해서 포토북 초안을 바로 만듭니다.
+                <h1
+                  className={`max-w-3xl font-semibold tracking-[-0.06em] text-slate-950 ${activeStep === "trip" ? "text-[clamp(2rem,4.5vw,4.9rem)]" : "text-[clamp(1.55rem,4.8vw,2.2rem)] sm:text-[clamp(1.9rem,4vw,3rem)]"}`}
+                >
+                  {activeStep === "trip"
+                    ? "사진을 올리면 날짜와 장소 흐름을 정리해서 포토북 초안을 바로 만듭니다."
+                    : currentStepMeta.title}
                 </h1>
-                <p className="max-w-2xl text-base leading-8 text-slate-600">
-                  이제는 숫자 버튼을 찍어가며 이동하지 않습니다. 여행 설정, 업로드, 사진 정리, 포맷 선택, Sweetbook 생성까지 한 흐름으로 이어지고, 각 단계가 끝나면 다음 작업이 자연스럽게 열립니다.
+                <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
+                  {activeStep === "trip"
+                    ? "여행 설정, 업로드, 사진 정리, 포맷 선택, Sweetbook 생성까지 한 흐름으로 이어집니다. 모바일에서는 한 단계씩만 보이고, 아래 고정 액션으로 다음 단계로 이동합니다."
+                    : currentStepMeta.copy}
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className={`flex flex-wrap gap-3 ${activeStep === "trip" ? "" : "hidden sm:flex"}`}>
                 <button
                   type="button"
                   className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white"
@@ -964,7 +1058,7 @@ export function StudioClient() {
               </div>
             </div>
 
-            <div className="studio-card grid w-full gap-4 rounded-[32px] p-5 xl:max-w-[23rem]">
+            <div className="studio-card hidden w-full gap-4 rounded-[28px] p-5 xl:grid xl:max-w-[23rem]">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
@@ -1020,13 +1114,42 @@ export function StudioClient() {
           </div>
         </section>
 
+        <nav className="wizard-rail rounded-[24px] p-2 lg:hidden">
+          <div className="scroll-row flex gap-2 overflow-x-auto">
+            {studioSteps.map((step) => {
+              const isCurrent = step.id === activeStep;
+              const isCompleted = step.index < currentStepIndex;
+              const isAvailable = isStepAvailable(step.id);
+
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  className={`wizard-pill min-w-[8.4rem] rounded-[20px] px-3 py-3 text-left ${isCurrent ? "is-active" : ""} ${isCompleted ? "is-complete" : ""}`}
+                  onClick={() => {
+                    if (isAvailable) {
+                      moveToStep(step.id);
+                    }
+                  }}
+                  disabled={!isAvailable}
+                >
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
+                    {step.index}단계
+                  </p>
+                  <p className="mt-2 text-sm font-semibold">{step.label}</p>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.42fr)_minmax(290px,0.78fr)]">
           <main className="space-y-6">
             <section
               ref={(node) => {
                 stepRefs.current.trip = node;
               }}
-              className={`studio-card rounded-[32px] p-6 ${activeStep === "trip" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+              className={getStepPanelClass("trip")}
             >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1098,7 +1221,7 @@ export function StudioClient() {
               ref={(node) => {
                 stepRefs.current.upload = node;
               }}
-              className={`studio-card rounded-[32px] p-6 ${activeStep === "upload" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+              className={getStepPanelClass("upload")}
             >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1106,10 +1229,10 @@ export function StudioClient() {
                     2. 사진 업로드
                   </p>
                   <h2 className="mt-3 text-[clamp(1.8rem,3vw,2.6rem)] font-semibold tracking-[-0.05em] text-slate-950">
-                    모바일에서도 바로 열리는 큰 선택 영역으로 사진을 받습니다.
+                    사진을 고르면 바로 목록으로 반영되고 다음 단계로 이어집니다.
                   </h2>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-                    버튼 하나만 두는 대신 큰 탭 영역과 파일 선택 버튼을 같이 둬서, 갤러리 선택기가 안정적으로 뜨게 구성했습니다.
+                    모바일 브라우저마다 다르게 보이는 기본 파일 입력 UI는 숨기고, 앱이 제어하는 선택 버튼과 상태 카드만 남겼습니다.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -1133,23 +1256,24 @@ export function StudioClient() {
 
               <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)]">
                 <div className="space-y-4">
-                  <label
-                    htmlFor="studio-photo-picker"
-                    className="flex min-h-[15rem] cursor-pointer flex-col items-center justify-center rounded-[32px] border border-dashed border-[rgba(15,118,110,0.32)] bg-[linear-gradient(180deg,_rgba(255,255,255,0.92),_rgba(237,247,246,0.98))] px-6 py-8 text-center transition hover:border-[var(--accent)] hover:bg-white"
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex min-h-[14rem] w-full cursor-pointer flex-col items-center justify-center rounded-[30px] border border-dashed border-[rgba(15,118,110,0.26)] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(239,247,245,0.96))] px-6 py-8 text-center transition hover:border-[var(--accent)] hover:bg-white"
                   >
                     <span className="rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                      탭해서 사진 선택
+                      사진 선택
                     </span>
                     <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                      여행 사진을 한 번에 올려 주세요.
+                      갤러리에서 여행 사진을 여러 장 고르세요.
                     </h3>
                     <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-                      JPG, JPEG, PNG, WebP 기준으로 여러 장을 한 번에 받습니다. 업로드 후에는 자동으로 날짜별, 장소별 챕터 후보를 만들고 위치가 비는 컷만 따로 보여줍니다.
+                      선택 직후 아래에 파일명과 장수가 바로 보이고, 업로드하면 날짜별·장소별로 자동 정리됩니다.
                     </p>
                     <p className="mt-4 text-xs font-medium text-slate-500">
-                      모바일에서는 이 큰 영역을 눌러 여는 방식이 가장 안정적입니다.
+                      갤럭시 사진은 위치 태그가 켜져 있으면 자동 정리 정확도가 더 높습니다.
                     </p>
-                  </label>
+                  </button>
                   <input
                     ref={fileInputRef}
                     id="studio-photo-picker"
@@ -1159,25 +1283,6 @@ export function StudioClient() {
                     className="sr-only"
                     onChange={handleFileInputChange}
                   />
-
-                  <div className="rounded-[26px] border border-[var(--line)] bg-white px-4 py-4">
-                    <label
-                      htmlFor="studio-photo-picker"
-                      className="mb-3 block text-sm font-semibold text-slate-900"
-                    >
-                      사진 선택기
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
-                      multiple
-                      className="block w-full rounded-[18px] border border-[var(--line)] bg-white px-3 py-3 text-sm text-slate-700 file:mr-4 file:rounded-full file:border-0 file:bg-[var(--accent-soft)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[var(--accent)]"
-                      onChange={handleFileInputChange}
-                    />
-                    <p className="mt-3 text-xs leading-5 text-slate-500">
-                      모바일에서 위 기본 선택기가 가장 안정적입니다. 큰 카드 영역을 눌러도 같은 선택기가 열립니다.
-                    </p>
-                  </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
@@ -1217,9 +1322,13 @@ export function StudioClient() {
                       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {selectedUploads.map((item) => (
                           <div key={item.key} className="overflow-hidden rounded-[26px] border border-[var(--line)] bg-white">
-                            <div className="flex h-44 items-end bg-[linear-gradient(160deg,_rgba(15,23,42,0.92),_rgba(15,118,110,0.52))] p-4 text-white">
-                              <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
+                            <div
+                              className="relative h-44 bg-slate-100 bg-cover bg-center"
+                              style={{ backgroundImage: `url(${item.previewUrl})` }}
+                            >
+                              <div className="absolute inset-0 bg-[linear-gradient(180deg,_rgba(15,23,42,0.04),_rgba(15,23,42,0.58))]" />
+                              <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/72">
                                   선택된 사진
                                 </p>
                                 <p className="mt-2 line-clamp-2 text-lg font-semibold tracking-[-0.03em]">
@@ -1283,22 +1392,32 @@ export function StudioClient() {
                   ) : null}
                 </div>
 
-                <div className="grid gap-3">
-                  {[ 
-                    ["선택한 사진", `${selectedUploads.length}장`],
-                    ["총 용량", formatBytes(totalUploadSize)],
-                    ["현재 테마", resolvedTheme.name],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-[24px] border border-[var(--line)] bg-white px-5 py-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        {label}
-                      </p>
-                      <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
-                        {value}
-                      </p>
-                    </div>
-                  ))}
-                  <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(15,118,110,0.06)] px-5 py-4">
+                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="rounded-[24px] border border-[var(--line)] bg-white px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      선택한 사진
+                    </p>
+                    <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
+                      {selectedUploads.length}장
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-[var(--line)] bg-white px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      총 용량
+                    </p>
+                    <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
+                      {formatBytes(totalUploadSize)}
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-[var(--line)] bg-white px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                      현재 테마
+                    </p>
+                    <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
+                      {resolvedTheme.name}
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(15,118,110,0.06)] px-5 py-4 sm:col-span-3 xl:col-span-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
                       샘플 데모도 가능
                     </p>
@@ -1314,7 +1433,7 @@ export function StudioClient() {
               ref={(node) => {
                 stepRefs.current.review = node;
               }}
-              className={`studio-card rounded-[32px] p-6 ${activeStep === "review" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+              className={getStepPanelClass("review")}
             >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1500,7 +1619,7 @@ export function StudioClient() {
               ref={(node) => {
                 stepRefs.current.preview = node;
               }}
-              className={`studio-card rounded-[32px] p-6 ${activeStep === "preview" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+              className={getStepPanelClass("preview")}
             >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1652,7 +1771,7 @@ export function StudioClient() {
               ref={(node) => {
                 stepRefs.current.publish = node;
               }}
-              className={`studio-card rounded-[32px] p-6 ${activeStep === "publish" ? "ring-2 ring-[rgba(15,118,110,0.18)]" : ""}`}
+              className={getStepPanelClass("publish")}
             >
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1847,7 +1966,7 @@ export function StudioClient() {
             </section>
           </main>
 
-          <aside className="space-y-6">
+          <aside className="hidden space-y-6 xl:block">
             <div className="studio-card rounded-[32px] p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                 지금 상태
@@ -1919,6 +2038,41 @@ export function StudioClient() {
               </ul>
             </div>
           </aside>
+        </div>
+
+        <div className="mobile-step-dock rounded-[26px] p-3 lg:hidden">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="button-secondary min-h-12 shrink-0 rounded-full px-4 py-3 text-sm font-semibold text-slate-900 disabled:opacity-45"
+              onClick={() => {
+                if (previousStep) {
+                  moveToStep(previousStep.id);
+                }
+              }}
+              disabled={!previousStep}
+            >
+              이전
+            </button>
+            <div className="min-w-0 flex-1 rounded-[20px] border border-[var(--line)] bg-white px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {currentStepIndex} / {studioSteps.length}
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-950">
+                {studioSteps[currentStepIndex - 1]?.label}
+              </p>
+            </div>
+            {mobilePrimaryAction ? (
+              <button
+                type="button"
+                className="button-primary min-h-12 shrink-0 rounded-full px-4 py-3 text-sm font-semibold text-white disabled:opacity-45"
+                onClick={mobilePrimaryAction.onClick}
+                disabled={mobilePrimaryAction.disabled}
+              >
+                {mobilePrimaryAction.label}
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
