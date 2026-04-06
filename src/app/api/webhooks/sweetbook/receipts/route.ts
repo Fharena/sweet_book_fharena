@@ -10,6 +10,8 @@ export async function GET(request: Request) {
     const limitParam = searchParams.get("limit");
     const statusParam = searchParams.get("status");
     const deliveryUid = searchParams.get("deliveryUid");
+    const orderUid = searchParams.get("orderUid");
+    const bookUid = searchParams.get("bookUid");
     const duplicateOnly = searchParams.get("duplicateOnly");
     const normalizedStatus =
       statusParam === "verified" ||
@@ -23,6 +25,8 @@ export async function GET(request: Request) {
       limit: Number.isFinite(normalizedLimit) ? normalizedLimit : 20,
       status: normalizedStatus,
       deliveryUid,
+      orderUid,
+      bookUid,
       duplicateOnly: duplicateOnly === "true",
     });
 

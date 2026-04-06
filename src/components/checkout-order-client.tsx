@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
@@ -8,14 +9,18 @@ import { useTripDraft } from "@/lib/use-trip-draft";
 import type {
   CheckoutComposeResult,
   CheckoutOrderDraft,
+  CheckoutOrderResult,
   CheckoutOrderRequest,
 } from "@/lib/checkout-order";
 import {
+  clearCheckoutOrderResult,
   clearCheckoutComposeResult,
   loadCheckoutComposeResult,
   loadCheckoutOrderDraft,
+  loadCheckoutOrderResult,
   saveCheckoutComposeResult,
   saveCheckoutOrderDraft,
+  saveCheckoutOrderResult,
 } from "@/lib/checkout-order";
 import { resolveTravelTheme } from "@/lib/travel-themes";
 
@@ -42,6 +47,136 @@ const defaultOrderDraft: CheckoutOrderDraft = {
   address2: "",
   memo: "",
 };
+
+type TrackingReceiptPayload = {
+  data?: {
+    items?: Array<{
+      receiptUid?: string;
+      receiptGroupUid?: string;
+      eventType?: string | null;
+      deliveryUid?: string | null;
+      latestReceivedAt?: string | null;
+      verificationStatus?: string | null;
+      verificationSummary?: string | null;
+      orderUid?: string | null;
+      bookUid?: string | null;
+      payloadPreview?: string | null;
+      receiptCount?: number | null;
+      duplicateCount?: number | null;
+      hasDuplicateReceipts?: boolean | null;
+    }>;
+    summary?: {
+      totalReceipts?: number;
+      uniqueDeliveryCount?: number;
+      duplicateGroupCount?: number;
+      invalidReceiptCount?: number;
+      missingSecretCount?: number;
+    };
+  };
+  error?: string;
+};
+
+const trackedEventMeta: Record<
+  string,
+  {
+    label: string;
+    note: string;
+  }
+> = {
+  "order.created": {
+    label: "주문 생성",
+    note: "Sweetbook가 주문 생성 이벤트를 수신 시스템으로 보냈습니다.",
+  },
+  "production.confirmed": {
+    label: "제작 확정",
+    note: "책 제작이 확정되어 실제 생산 단계로 들어가기 시작합니다.",
+  },
+  "production.started": {
+    label: "제작 시작",
+    note: "제작이 실제로 시작된 상태입니다.",
+  },
+  "production.completed": {
+    label: "제작 완료",
+    note: "인쇄/제작이 끝나 배송 단계로 넘어갈 준비가 된 상태입니다.",
+  },
+  "shipping.departed": {
+    label: "배송 출발",
+    note: "출고가 완료되어 배송 중인 상태입니다.",
+  },
+  "shipping.delivered": {
+    label: "배송 완료",
+    note: "수령 완료까지 이어진 상태입니다.",
+  },
+  "order.cancelled": {
+    label: "주문 취소",
+    note: "주문이 취소된 상태이므로 운영 확인이 필요합니다.",
+  },
+  "order.restored": {
+    label: "주문 복구",
+    note: "취소되었던 주문이 다시 활성화된 상태입니다.",
+  },
+  "webhook.exhausted": {
+    label: "웹훅 재시도 종료",
+    note: "웹훅 전송 재시도가 모두 끝난 상태입니다.",
+  },
+};
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "아직 없음";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function resolveTrackingEventMeta(eventType: string | null | undefined) {
+  if (!eventType) {
+    return {
+      label: "이벤트 미확인",
+      note: "아직 이 주문과 연결된 웹훅 이벤트를 받지 않았습니다.",
+    };
+  }
+
+  return (
+    trackedEventMeta[eventType] ?? {
+      label: eventType,
+      note: "수신 로그에 기록된 이벤트입니다.",
+    }
+  );
+}
+
+function resolveVerificationMeta(status: string | null | undefined) {
+  switch (status) {
+    case "verified":
+      return {
+        label: "검증 완료",
+        className: "bg-[rgba(15,118,110,0.12)] text-[var(--accent)]",
+      };
+    case "invalid-signature":
+      return {
+        label: "검증 실패",
+        className: "bg-rose-100 text-rose-700",
+      };
+    case "missing-secret":
+      return {
+        label: "시크릿 미설정",
+        className: "bg-[rgba(249,115,82,0.16)] text-[var(--accent-secondary)]",
+      };
+    default:
+      return {
+        label: status ?? "상태 미확인",
+        className: "bg-slate-100 text-slate-700",
+      };
+  }
+}
 
 function validateDraft(draft: CheckoutOrderDraft) {
   const errors: Partial<Record<keyof CheckoutOrderDraft, string>> = {};
@@ -206,12 +341,52 @@ export function CheckoutOrderClient() {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [isComposing, setIsComposing] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
-  const [orderResult, setOrderResult] = useState<{
-    orderUid: string | null;
-    totalAmount: number | null;
-    orderStatusDisplay: string | null;
-    paidCreditAmount: number | null;
-  } | null>(null);
+  const [orderResult, setOrderResult] = useState<CheckoutOrderResult | null>(() =>
+    loadCheckoutOrderResult(),
+  );
+  const [trackingState, setTrackingState] = useState<TrackingReceiptPayload | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
+  const [lastTrackingAt, setLastTrackingAt] = useState<string | null>(null);
+  const [trackingRefreshToken, setTrackingRefreshToken] = useState(0);
+
+  const trackingSourceKey = orderResult?.orderUid?.trim()
+    ? ("orderUid" as const)
+    : orderResult?.bookUid?.trim()
+      ? ("bookUid" as const)
+      : form.bookUid.trim()
+        ? ("bookUid" as const)
+        : null;
+  const trackingSourceValue =
+    trackingSourceKey === "orderUid"
+      ? orderResult?.orderUid?.trim() ?? ""
+      : trackingSourceKey === "bookUid"
+        ? orderResult?.bookUid?.trim() || form.bookUid.trim()
+        : "";
+  const trackingSource =
+    trackingSourceKey && trackingSourceValue
+      ? { key: trackingSourceKey, value: trackingSourceValue }
+      : null;
+  const trackingItems = trackingState?.data?.items ?? [];
+  const trackingSummary = trackingState?.data?.summary;
+  const latestTrackingItem = trackingItems[0];
+  const latestTrackingMeta = resolveTrackingEventMeta(latestTrackingItem?.eventType);
+  const opsSearchParams = new URLSearchParams();
+
+  if (orderResult?.orderUid?.trim()) {
+    opsSearchParams.set("orderUid", orderResult.orderUid.trim());
+  }
+
+  if (orderResult?.bookUid?.trim() || form.bookUid.trim()) {
+    opsSearchParams.set(
+      "bookUid",
+      orderResult?.bookUid?.trim() || form.bookUid.trim(),
+    );
+  }
+
+  const opsHref = opsSearchParams.size
+    ? `/ops/webhooks?${opsSearchParams.toString()}`
+    : "/ops/webhooks";
 
   useEffect(() => {
     saveCheckoutOrderDraft(form);
@@ -227,6 +402,15 @@ export function CheckoutOrderClient() {
   }, [composeResult]);
 
   useEffect(() => {
+    if (orderResult) {
+      saveCheckoutOrderResult(orderResult);
+      return;
+    }
+
+    clearCheckoutOrderResult();
+  }, [orderResult]);
+
+  useEffect(() => {
     if (composeResult?.bookUid && !form.bookUid.trim()) {
       setForm((current) => ({
         ...current,
@@ -234,6 +418,70 @@ export function CheckoutOrderClient() {
       }));
     }
   }, [composeResult?.bookUid, form.bookUid]);
+
+  useEffect(() => {
+    if (!trackingSourceKey || !trackingSourceValue) {
+      setTrackingState(null);
+      setTrackingError(null);
+      setLastTrackingAt(null);
+      return;
+    }
+
+    const currentTrackingSource = {
+      key: trackingSourceKey,
+      value: trackingSourceValue,
+    };
+    let isCancelled = false;
+
+    async function refreshTracking() {
+      setIsRefreshingTracking(true);
+      setTrackingError(null);
+
+      try {
+        const params = new URLSearchParams({
+          limit: "12",
+        });
+        params.set(currentTrackingSource.key, currentTrackingSource.value);
+
+        const response = await fetch(
+          `/api/webhooks/sweetbook/receipts?${params.toString()}`,
+          { cache: "no-store" },
+        );
+        const payload = (await response.json()) as TrackingReceiptPayload;
+
+        if (!response.ok) {
+          throw new Error(payload.error ?? "주문 추적 이력을 불러오지 못했습니다.");
+        }
+
+        if (!isCancelled) {
+          setTrackingState(payload);
+          setLastTrackingAt(new Date().toISOString());
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setTrackingError(
+            error instanceof Error
+              ? error.message
+              : "주문 추적 이력을 불러오는 중 오류가 발생했습니다.",
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsRefreshingTracking(false);
+        }
+      }
+    }
+
+    void refreshTracking();
+    const timer = window.setInterval(() => {
+      void refreshTracking();
+    }, 15000);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [trackingRefreshToken, trackingSourceKey, trackingSourceValue]);
 
   async function handleComposeBook() {
     if (!draft) {
@@ -280,6 +528,7 @@ export function CheckoutOrderClient() {
       };
 
       setComposeResult(nextResult);
+      setOrderResult(null);
       setForm((current) => ({
         ...current,
         bookUid: payload.bookUid ?? current.bookUid,
@@ -338,6 +587,7 @@ export function CheckoutOrderClient() {
       const responseData = payload.data ?? payload;
       setOrderResult({
         orderUid: typeof responseData.orderUid === "string" ? responseData.orderUid : null,
+        bookUid: form.bookUid.trim(),
         totalAmount:
           typeof responseData.totalAmount === "number" ? responseData.totalAmount : null,
         orderStatusDisplay:
@@ -348,6 +598,8 @@ export function CheckoutOrderClient() {
           typeof responseData.paidCreditAmount === "number"
             ? responseData.paidCreditAmount
             : null,
+        themeLabel: composeResult?.themeLabel ?? selectedTheme.name,
+        savedAt: new Date().toISOString(),
       });
     } catch (error) {
       setOrderError(
@@ -409,6 +661,9 @@ export function CheckoutOrderClient() {
               현재 선택된 패턴은 <span className="font-semibold text-slate-900">{selectedTheme.name}</span>
               이고, 이 정보는 책 생성 계획의 메타데이터에도 함께 반영됩니다.
             </p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              주문 이후 상태는 웹훅 수신 로그와 연결해 이 화면에서도 바로 추적합니다.
+            </p>
           </div>
 
           <div className="ink-panel rounded-[28px] p-5 text-white">
@@ -421,6 +676,11 @@ export function CheckoutOrderClient() {
             {composeResult?.themeLabel ? (
               <p className="mt-3 text-sm leading-6 text-white/76">
                 생성 계획 테마: {composeResult.themeLabel}
+              </p>
+            ) : null}
+            {latestTrackingItem ? (
+              <p className="mt-3 text-sm leading-6 text-white/76">
+                최근 웹훅: {resolveTrackingEventMeta(latestTrackingItem.eventType).label}
               </p>
             ) : null}
           </div>
@@ -534,23 +794,45 @@ export function CheckoutOrderClient() {
               </div>
             ) : null}
             {orderResult ? (
-              <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-                <p>
-                  <span className="font-semibold text-slate-900">주문 UID:</span>{" "}
-                  {orderResult.orderUid ?? "응답에 포함되지 않았습니다"}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">상태:</span>{" "}
-                  {orderResult.orderStatusDisplay ?? "확인 중"}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">총액:</span>{" "}
-                  {formatCurrency(orderResult.totalAmount)}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-900">차감 금액:</span>{" "}
-                  {formatCurrency(orderResult.paidCreditAmount)}
-                </p>
+              <div className="mt-4 space-y-4">
+                <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm leading-6 text-emerald-800">
+                  주문 요청이 접수됐습니다. 이제 아래 추적 카드에서 Sweetbook 웹훅 기준으로
+                  이후 상태를 계속 확인할 수 있습니다.
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-5 py-4 text-sm leading-6 text-slate-700">
+                    <p>
+                      <span className="font-semibold text-slate-900">주문 UID:</span>{" "}
+                      {orderResult.orderUid ?? "응답에 포함되지 않았습니다"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-900">상태:</span>{" "}
+                      {orderResult.orderStatusDisplay ?? "확인 중"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-900">주문 시각:</span>{" "}
+                      {formatDateTime(orderResult.savedAt)}
+                    </p>
+                  </div>
+                  <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-5 py-4 text-sm leading-6 text-slate-700">
+                    <p>
+                      <span className="font-semibold text-slate-900">총액:</span>{" "}
+                      {formatCurrency(orderResult.totalAmount)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-900">차감 금액:</span>{" "}
+                      {formatCurrency(orderResult.paidCreditAmount)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-slate-900">추적 기준:</span>{" "}
+                      {trackingSource?.key === "orderUid"
+                        ? "orderUid 기준"
+                        : trackingSource?.key === "bookUid"
+                          ? "bookUid 기준"
+                          : "없음"}
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
               <p className="mt-4 text-sm leading-6 text-slate-600">
@@ -559,9 +841,138 @@ export function CheckoutOrderClient() {
               </p>
             )}
 
+            <div className="mt-5 rounded-[24px] border border-[var(--line)] bg-[linear-gradient(145deg,_rgba(255,255,255,0.94),_rgba(247,240,231,0.84))] px-5 py-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">주문 이후 상태 추적</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    웹훅 수신 로그를 15초 주기로 새로 읽어 현재 주문의 이후 상태를 이
+                    화면에서 바로 확인합니다.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-500"
+                    onClick={() => setTrackingRefreshToken((current) => current + 1)}
+                    disabled={isRefreshingTracking || !trackingSource}
+                  >
+                    {isRefreshingTracking ? "새로고침 중..." : "지금 새로고침"}
+                  </button>
+                  <Link
+                    href={opsHref}
+                    className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-500"
+                  >
+                    운영 화면 열기
+                  </Link>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">최근 이벤트</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {latestTrackingMeta.label}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {latestTrackingMeta.note}
+                  </p>
+                </div>
+                <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">수신 그룹</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {trackingSummary?.uniqueDeliveryCount ?? trackingItems.length}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    중복 그룹 {trackingSummary?.duplicateGroupCount ?? 0}개
+                  </p>
+                </div>
+                <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">마지막 동기화</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">
+                    {formatDateTime(lastTrackingAt)}
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    검증 실패 {trackingSummary?.invalidReceiptCount ?? 0}건 / 시크릿 누락{" "}
+                    {trackingSummary?.missingSecretCount ?? 0}건
+                  </p>
+                </div>
+              </div>
+
+              {trackingSource ? (
+                trackingItems.length ? (
+                  <div className="mt-4 space-y-3">
+                    {trackingItems.map((item) => {
+                      const verificationMeta = resolveVerificationMeta(
+                        item.verificationStatus,
+                      );
+                      const eventMeta = resolveTrackingEventMeta(item.eventType);
+
+                      return (
+                        <article
+                          key={
+                            item.receiptGroupUid ??
+                            item.receiptUid ??
+                            `${item.eventType ?? "event"}-${item.latestReceivedAt ?? "pending"}`
+                          }
+                          className="rounded-[22px] border border-[var(--line)] bg-white/86 px-4 py-4"
+                        >
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">
+                                {eventMeta.label}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {formatDateTime(item.latestReceivedAt)}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                              <span
+                                className={`rounded-full px-3 py-1 ${verificationMeta.className}`}
+                              >
+                                {item.verificationSummary ?? verificationMeta.label}
+                              </span>
+                              {item.hasDuplicateReceipts ? (
+                                <span className="rounded-full bg-[rgba(249,115,82,0.16)] px-3 py-1 text-[var(--accent-secondary)]">
+                                  중복 {item.duplicateCount ?? 0}건
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-slate-600">
+                            {eventMeta.note}
+                          </p>
+                          {item.payloadPreview ? (
+                            <p className="mt-2 text-xs leading-5 text-slate-500">
+                              응답 미리보기: {item.payloadPreview}
+                            </p>
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-[22px] border border-dashed border-[var(--line)] bg-white/68 px-5 py-6 text-sm leading-6 text-slate-500">
+                    아직 이{" "}
+                    {trackingSource.key === "orderUid" ? "orderUid" : "bookUid"}와 연결된
+                    웹훅 이벤트가 없습니다. 주문 직후이거나 웹훅 테스트 전일 수 있습니다.
+                  </div>
+                )
+              ) : (
+                <div className="mt-4 rounded-[22px] border border-dashed border-[var(--line)] bg-white/68 px-5 py-6 text-sm leading-6 text-slate-500">
+                  bookUid 또는 orderUid가 생기면 이 영역에서 자동 추적을 시작합니다.
+                </div>
+              )}
+            </div>
+
             {orderError ? (
               <div className="mt-4 rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm leading-6 text-rose-700">
                 {orderError}
+              </div>
+            ) : null}
+            {trackingError ? (
+              <div className="mt-4 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 text-sm leading-6 text-amber-800">
+                {trackingError}
               </div>
             ) : null}
           </div>

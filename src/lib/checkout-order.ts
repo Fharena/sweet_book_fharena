@@ -7,6 +7,16 @@ export type CheckoutComposeResult = {
   savedAt: string;
 };
 
+export type CheckoutOrderResult = {
+  orderUid: string | null;
+  totalAmount: number | null;
+  orderStatusDisplay: string | null;
+  paidCreditAmount: number | null;
+  bookUid: string;
+  themeLabel?: string;
+  savedAt: string;
+};
+
 export type CheckoutOrderDraft = {
   ordererName: string;
   bookUid: string;
@@ -42,6 +52,7 @@ export type CheckoutOrderRequest = {
 
 export const CHECKOUT_COMPOSE_RESULT_KEY = "triplogue:checkout-compose-result";
 export const CHECKOUT_ORDER_DRAFT_KEY = "triplogue:checkout-order-draft";
+export const CHECKOUT_ORDER_RESULT_KEY = "triplogue:checkout-order-result";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -102,6 +113,39 @@ export function clearCheckoutComposeResult() {
   }
 
   window.sessionStorage.removeItem(CHECKOUT_COMPOSE_RESULT_KEY);
+}
+
+export function isCheckoutOrderResult(value: unknown): value is CheckoutOrderResult {
+  return (
+    isObject(value) &&
+    (value.orderUid === null || isString(value.orderUid)) &&
+    (value.totalAmount === null || typeof value.totalAmount === "number") &&
+    (value.orderStatusDisplay === null || isString(value.orderStatusDisplay)) &&
+    (value.paidCreditAmount === null || typeof value.paidCreditAmount === "number") &&
+    isString(value.bookUid) &&
+    (typeof value.themeLabel === "undefined" || isString(value.themeLabel)) &&
+    isString(value.savedAt)
+  );
+}
+
+export function loadCheckoutOrderResult(): CheckoutOrderResult | null {
+  return readSessionValue(CHECKOUT_ORDER_RESULT_KEY, isCheckoutOrderResult);
+}
+
+export function saveCheckoutOrderResult(result: CheckoutOrderResult) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(CHECKOUT_ORDER_RESULT_KEY, JSON.stringify(result));
+}
+
+export function clearCheckoutOrderResult() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.removeItem(CHECKOUT_ORDER_RESULT_KEY);
 }
 
 export function isCheckoutOrderDraft(value: unknown): value is CheckoutOrderDraft {

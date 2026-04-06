@@ -56,6 +56,8 @@ type WebhookReceiptQuery = {
   limit?: number;
   status?: WebhookReceiptStatusFilter;
   deliveryUid?: string | null;
+  orderUid?: string | null;
+  bookUid?: string | null;
   duplicateOnly?: boolean;
 };
 
@@ -313,10 +315,20 @@ export async function listWebhookReceipts(query: WebhookReceiptQuery = {}) {
   const receipts = await readReceipts();
   const normalizedLimit = Math.min(Math.max(query.limit ?? 20, 1), 100);
   const normalizedDeliveryUid = query.deliveryUid?.trim();
+  const normalizedOrderUid = query.orderUid?.trim();
+  const normalizedBookUid = query.bookUid?.trim();
   const normalizedStatus = query.status ?? "all";
 
   const filteredReceipts = receipts.filter((receipt) => {
     if (normalizedDeliveryUid && receipt.deliveryUid !== normalizedDeliveryUid) {
+      return false;
+    }
+
+    if (normalizedOrderUid && receipt.orderUid !== normalizedOrderUid) {
+      return false;
+    }
+
+    if (normalizedBookUid && receipt.bookUid !== normalizedBookUid) {
       return false;
     }
 

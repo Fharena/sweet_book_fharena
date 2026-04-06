@@ -5,7 +5,7 @@ Triplogue는 여행 사진을 업로드하면 촬영 시간과 위치 정보를 
 핵심 경험은 아래와 같습니다.
 - 여행 사진을 올립니다.
 - 앱이 EXIF의 촬영 시간과 GPS 정보를 우선 읽습니다.
-- 사진을 날짜별, 장소별 챕터를 자동 그룹핑합니다.
+- 사진을 날짜별, 장소별 챕터로 자동 그룹핑합니다.
 - 위치 정보가 없는 사진은 수동 태깅으로 보완합니다.
 - 정리된 여행 기록을 포토북 초안과 주문 흐름으로 연결합니다.
 
@@ -64,6 +64,7 @@ npm run dev
 현재 MVP에는 운영 확인용 화면도 포함되어 있습니다.
 
 - `/ops/webhooks`: Sweetbook 웹훅 등록, 테스트 전송, delivery 이력 조회, 수신 로그 확인
+- `/checkout`: 테스트 책 생성, 주문 요청, orderUid 또는 bookUid 기준 수신 추적
 
 이 화면은 운영 전환 전에 아래 항목을 빠르게 검증하기 위한 용도입니다.
 - 웹훅 URL 등록 상태
@@ -71,11 +72,13 @@ npm run dev
 - 테스트 전송 성공/실패 응답
 - 최근 실패 delivery 추적
 - 실제 수신 receipt와 delivery 이력의 대응 관계
+- 주문 직후 checkout에서 바로 상태를 추적할 수 있는지
 
 ## 제출 문서
 
 - [5분 데모 스크립트](docs/demo-script.md)
 - [제출 체크리스트](docs/submission-checklist.md)
+- [운영/주문 확인 런북](docs/operations-order-runbook.md)
 - [크리티컬 이슈 기록](docs/critical-issues.md)
 
 ## 현재 작업 단위
@@ -97,3 +100,10 @@ npm run dev
 - 원인 가설
 - 대응 내용
 - 남은 리스크
+
+## 문서 읽는 순서
+
+1. [5분 데모 스크립트](docs/demo-script.md)로 발표 흐름을 먼저 잡습니다.
+2. [운영/주문 확인 런북](docs/operations-order-runbook.md)으로 실제 검증 순서를 점검합니다.
+3. [제출 체크리스트](docs/submission-checklist.md)로 제출 직전 누락을 확인합니다.
+4. [크리티컬 이슈 기록](docs/critical-issues.md)으로 남은 리스크를 다시 봅니다.
