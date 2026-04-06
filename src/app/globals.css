@@ -39,7 +39,8 @@ html {
 body {
   position: relative;
   isolation: isolate;
-  background: var(--background);
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f8f4ee 0%, #f3eee7 100%);
   color: var(--foreground);
   font-family:
     "Pretendard Variable",
@@ -50,11 +51,11 @@ body {
     var(--font-manrope),
     sans-serif;
   background-image:
-    radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.88), transparent 24%),
-    radial-gradient(circle at 84% 16%, rgba(243, 123, 87, 0.16), transparent 26%),
-    radial-gradient(circle at 82% 72%, rgba(15, 118, 110, 0.14), transparent 30%),
-    linear-gradient(140deg, rgba(231, 197, 162, 0.24), transparent 42%),
-    linear-gradient(180deg, rgba(10, 78, 85, 0.08), transparent 54%);
+    radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.96), transparent 24%),
+    radial-gradient(circle at 86% 14%, rgba(243, 123, 87, 0.14), transparent 26%),
+    radial-gradient(circle at 82% 72%, rgba(15, 118, 110, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.46), transparent 40%);
+  background-attachment: fixed;
 }
 
 body::before {
@@ -63,11 +64,11 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(28, 35, 41, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(28, 35, 41, 0.028) 1px, transparent 1px);
-  background-size: 34px 34px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent 92%);
-  opacity: 0.5;
+    linear-gradient(rgba(28, 35, 41, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 35, 41, 0.018) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 92%);
+  opacity: 0.44;
   z-index: -2;
 }
 
@@ -367,6 +368,49 @@ a {
 
 .scroll-row::-webkit-scrollbar {
   display: none;
+}
+
+.studio-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(243, 123, 87, 0.12), transparent 24%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(251, 244, 237, 0.98));
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+}
+
+.studio-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -5% -12% auto;
+  width: 240px;
+  height: 240px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8), transparent 72%);
+  pointer-events: none;
+}
+
+.studio-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 245, 238, 0.92)),
+    linear-gradient(180deg, rgba(15, 118, 110, 0.04), rgba(243, 123, 87, 0.04));
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.studio-card::after {
+  content: "";
+  position: absolute;
+  inset: auto auto -40px -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.58), transparent 72%);
+  pointer-events: none;
 }
 
 @media (max-width: 640px) {

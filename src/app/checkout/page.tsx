@@ -1,5 +1,5 @@
-import { CheckoutOrderClient } from "@/components/checkout-order-client";
+import { redirect } from "next/navigation";
 
 export default function CheckoutPage() {
-  return <CheckoutOrderClient />;
+  redirect("/studio?step=publish");
 }

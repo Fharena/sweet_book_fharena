@@ -59,7 +59,7 @@ export function DemoTripLauncher({
           <button
             type="button"
             className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
-            onClick={() => handleLoadDemoDraft("/trips/review")}
+            onClick={() => handleLoadDemoDraft("/studio?step=review")}
             disabled={isPending}
           >
             {isPending ? "샘플 초안 준비 중..." : "샘플 초안으로 검토 시작"}
@@ -67,7 +67,7 @@ export function DemoTripLauncher({
           <button
             type="button"
             className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            onClick={() => handleLoadDemoDraft("/book/preview")}
+            onClick={() => handleLoadDemoDraft("/studio?step=preview")}
             disabled={isPending}
           >
             샘플 초안 바로 미리보기

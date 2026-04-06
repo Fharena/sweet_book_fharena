@@ -80,22 +80,23 @@ export async function extractPhotoMetadata(
     exif = null;
   }
 
-  const capturedAt = pickCapturedAt(exif);
+  const capturedAt =
+    pickCapturedAt(exif) ||
+    (file.lastModified ? new Date(file.lastModified).toISOString() : null);
   const coordinates = normalizeCoordinates(exif);
   const override = options.manualOverrides?.get(file.name);
 
   let locationLabel: string | null = null;
   let locationSource: ImportedPhoto["locationSource"] = "unknown";
-  let groupingReason = "No EXIF location found yet.";
+  let groupingReason = "촬영 메타데이터를 아직 읽지 못했습니다.";
 
   if (override?.locationLabel) {
     locationLabel = override.locationLabel;
     locationSource = "manual";
-    groupingReason = "Manual place tag provided by the user.";
+    groupingReason = "사용자가 수동으로 입력한 위치 태그를 우선 적용했습니다.";
   } else if (coordinates) {
-    locationLabel = formatCoordinateLabel(coordinates);
     locationSource = "exif";
-    groupingReason = "Resolved directly from EXIF GPS metadata.";
+    groupingReason = `${formatCoordinateLabel(coordinates)} 좌표를 읽었습니다. 같은 날짜와 인접 좌표를 기준으로 장소를 자동 정리합니다.`;
   }
 
   const capturedDate = capturedAt ? new Date(capturedAt) : null;
@@ -118,7 +119,7 @@ export async function extractPhotoMetadata(
         : coordinates,
     locationLabel,
     locationSource,
-    requiresManualLocationTagging: !locationLabel,
+    requiresManualLocationTagging: !override?.locationLabel && !coordinates,
     groupingReason,
   };
 }

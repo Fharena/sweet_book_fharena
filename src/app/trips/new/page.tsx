@@ -1,5 +1,5 @@
-import { TripIntakeClient } from "@/components/trip-intake-client";
+import { redirect } from "next/navigation";
 
 export default function TripImportPage() {
-  return <TripIntakeClient />;
+  redirect("/studio?step=upload");
 }
