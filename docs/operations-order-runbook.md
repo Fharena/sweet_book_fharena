@@ -60,6 +60,7 @@
 - 주문 요청 후 응답에 `orderUid`, 상태, 차감 금액이 보이는지 확인한다.
 - checkout의 주문 추적 카드에서 최근 이벤트와 마지막 동기화 시각이 보이는지 확인한다.
 - 필요하면 `지금 새로고침`으로 receipt가 바로 들어오는지 다시 확인한다.
+- checkout에서 복사한 `orderUid` 또는 `bookUid`로 `ops/webhooks`를 열어 같은 기준의 receipt만 필터링되는지 확인한다.
 
 ### 6. 웹훅 운영
 
@@ -67,6 +68,7 @@
 - 테스트 이벤트를 전송하고 delivery가 하나 생성되는지 확인한다.
 - 수신 로그에서 `deliveryUid`, `receiptUid`, 검증 상태를 함께 본다.
 - 실패 건과 중복 건이 있으면 같은 deliveryUid 기준으로 묶여 보이는지 확인한다.
+- checkout에서 전달된 `orderUid`/`bookUid` 기준 로그와 운영 화면의 receipt 필터 결과가 같은지 확인한다.
 
 ## 자주 만나는 문제
 

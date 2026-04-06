@@ -387,6 +387,8 @@ export function CheckoutOrderClient() {
     );
   }
 
+  opsSearchParams.set("source", "checkout");
+
   const opsHref = opsSearchParams.size
     ? `/ops/webhooks?${opsSearchParams.toString()}`
     : "/ops/webhooks";

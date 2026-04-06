@@ -106,6 +106,7 @@ npm run dev
 - 최근 실패 delivery 추적
 - 실제 수신 receipt와 delivery 이력의 대응 관계
 - 주문 직후 checkout에서 바로 상태를 추적할 수 있는지
+- checkout에서 얻은 `orderUid` 또는 `bookUid`를 `ops/webhooks`로 넘겨 같은 기준의 receipt 로그를 바로 이어서 보는지
 
 샘플 초안을 불러온 뒤에는 위 화면을 통해 검토와 주문 추적까지 한 번에 이어서 보는 것을 권장합니다.
 

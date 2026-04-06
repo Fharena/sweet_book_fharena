@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { SweetbookWebhookEvent } from "@/lib/trip-domain";
@@ -230,7 +232,16 @@ async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
+function normalizeFilterValue(value: string | null) {
+  return value?.trim() ?? "";
+}
+
 export function WebhookOpsClient() {
+  const searchParams = useSearchParams();
+  const queryOrderUid = normalizeFilterValue(searchParams.get("orderUid"));
+  const queryBookUid = normalizeFilterValue(searchParams.get("bookUid"));
+  const queryDeliveryUid = normalizeFilterValue(searchParams.get("deliveryUid"));
+  const querySource = normalizeFilterValue(searchParams.get("source"));
   const [webhookUrl, setWebhookUrl] = useState("");
   const [description, setDescription] = useState("Triplogue 주문 상태 연동");
   const [selectedEvents, setSelectedEvents] = useState<SweetbookWebhookEvent[]>([
@@ -244,6 +255,9 @@ export function WebhookOpsClient() {
     "all" | "verified" | "invalid-signature" | "missing-secret"
   >("all");
   const [duplicateOnly, setDuplicateOnly] = useState(false);
+  const [receiptOrderUidFilter, setReceiptOrderUidFilter] = useState("");
+  const [receiptBookUidFilter, setReceiptBookUidFilter] = useState("");
+  const [receiptDeliveryUidFilter, setReceiptDeliveryUidFilter] = useState("");
   const [configState, setConfigState] = useState<WebhookConfigPayload | null>(null);
   const [deliveriesState, setDeliveriesState] = useState<DeliveryPayload | null>(null);
   const [receiptsState, setReceiptsState] = useState<ReceiptPayload | null>(null);
@@ -257,6 +271,20 @@ export function WebhookOpsClient() {
   const [isSendingTest, setIsSendingTest] = useState(false);
 
   const selectedEventSet = useMemo(() => new Set(selectedEvents), [selectedEvents]);
+  const hasReceiptTargetFilter = Boolean(
+    receiptOrderUidFilter || receiptBookUidFilter || receiptDeliveryUidFilter,
+  );
+  const activeReceiptTargetChips = [
+    receiptOrderUidFilter ? `orderUid ${receiptOrderUidFilter}` : null,
+    receiptBookUidFilter ? `bookUid ${receiptBookUidFilter}` : null,
+    receiptDeliveryUidFilter ? `deliveryUid ${receiptDeliveryUidFilter}` : null,
+  ].filter((value): value is string => Boolean(value));
+
+  useEffect(() => {
+    setReceiptOrderUidFilter(queryOrderUid);
+    setReceiptBookUidFilter(queryBookUid);
+    setReceiptDeliveryUidFilter(queryDeliveryUid);
+  }, [queryBookUid, queryDeliveryUid, queryOrderUid]);
 
   const refreshConfig = useCallback(async () => {
     setIsRefreshing(true);
@@ -334,6 +362,18 @@ export function WebhookOpsClient() {
         params.set("status", receiptStatusFilter);
       }
 
+      if (receiptOrderUidFilter) {
+        params.set("orderUid", receiptOrderUidFilter);
+      }
+
+      if (receiptBookUidFilter) {
+        params.set("bookUid", receiptBookUidFilter);
+      }
+
+      if (receiptDeliveryUidFilter) {
+        params.set("deliveryUid", receiptDeliveryUidFilter);
+      }
+
       if (duplicateOnly) {
         params.set("duplicateOnly", "true");
       }
@@ -358,7 +398,13 @@ export function WebhookOpsClient() {
     } finally {
       setIsRefreshingReceipts(false);
     }
-  }, [duplicateOnly, receiptStatusFilter]);
+  }, [
+    duplicateOnly,
+    receiptBookUidFilter,
+    receiptDeliveryUidFilter,
+    receiptOrderUidFilter,
+    receiptStatusFilter,
+  ]);
 
   useEffect(() => {
     void refreshConfig();
@@ -486,6 +532,12 @@ export function WebhookOpsClient() {
     );
   }
 
+  function clearReceiptFilters() {
+    setReceiptOrderUidFilter("");
+    setReceiptBookUidFilter("");
+    setReceiptDeliveryUidFilter("");
+  }
+
   const receiptItems = normalizeReceiptItems(receiptsState ?? {});
   const receiptSummary = receiptsState?.data?.summary;
   const deliveryItems = deliveriesState?.data?.items ?? [];
@@ -500,6 +552,58 @@ export function WebhookOpsClient() {
 
   return (
     <div className="space-y-5">
+      {hasReceiptTargetFilter ? (
+        <article className="soft-card rounded-[28px] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="eyebrow text-[11px] font-semibold">현재 추적 대상</p>
+              <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+                특정 주문 또는 책 기준으로 receipt 로그를 좁혀 보고 있습니다.
+              </h2>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+                {querySource === "checkout"
+                  ? "checkout 화면에서 넘긴 orderUid 또는 bookUid를 이어받아 운영 로그를 같은 기준으로 보여줍니다."
+                  : "URL query 또는 운영 화면 입력값을 기준으로 receipt 로그를 좁혀 현재 대상만 빠르게 확인합니다."}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400"
+                onClick={clearReceiptFilters}
+              >
+                receipt 필터 지우기
+              </button>
+              {querySource === "checkout" ? (
+                <Link
+                  href="/checkout"
+                  className="rounded-full border border-[var(--line)] bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400"
+                >
+                  checkout으로 돌아가기
+                </Link>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {activeReceiptTargetChips.map((chip) => (
+              <span
+                key={chip}
+                className="rounded-full bg-[rgba(15,118,110,0.12)] px-3 py-1 text-xs font-semibold text-[var(--accent)]"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            이 필터는 수신 로그 영역에 바로 적용되며, checkout에서 보던 주문 추적과 같은
+            기준으로 운영 로그를 비교하는 데 사용됩니다.
+          </p>
+        </article>
+      ) : null}
+
       <article className="soft-card hero-sheen rounded-[28px] p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -743,7 +847,7 @@ export function WebhookOpsClient() {
           ))}
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="mt-5 grid gap-3 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
           <label className="grid gap-2">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
               수신 상태
@@ -768,6 +872,53 @@ export function WebhookOpsClient() {
             </select>
           </label>
 
+          <label className="grid gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              orderUid
+            </span>
+            <input
+              className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+              placeholder="ord_..."
+              value={receiptOrderUidFilter}
+              onChange={(event) => setReceiptOrderUidFilter(event.target.value.trim())}
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              bookUid
+            </span>
+            <input
+              className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+              placeholder="bk_..."
+              value={receiptBookUidFilter}
+              onChange={(event) => setReceiptBookUidFilter(event.target.value.trim())}
+            />
+          </label>
+
+          <label className="grid gap-2">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+              deliveryUid
+            </span>
+            <input
+              className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+              placeholder="dly_..."
+              value={receiptDeliveryUidFilter}
+              onChange={(event) =>
+                setReceiptDeliveryUidFilter(event.target.value.trim())
+              }
+            />
+          </label>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              className="w-full rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-400"
+              onClick={clearReceiptFilters}
+            >
+              receipt 필터 초기화
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 space-y-3">
