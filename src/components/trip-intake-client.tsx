@@ -512,18 +512,18 @@ export function TripIntakeClient() {
                     가능하고 파일 선택기로 올려도 됩니다.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="button-secondary rounded-full px-4 py-2 text-sm font-semibold text-slate-800"
-                  onClick={() => inputRef.current?.click()}
+                <label
+                  htmlFor="trip-photo-picker"
+                  className="button-secondary cursor-pointer rounded-full px-4 py-2 text-sm font-semibold text-slate-800"
                 >
                   파일 고르기
-                </button>
+                </label>
               </div>
 
               <input
+                id="trip-photo-picker"
                 ref={inputRef}
-                className="hidden"
+                className="sr-only"
                 type="file"
                 accept="image/*"
                 multiple
