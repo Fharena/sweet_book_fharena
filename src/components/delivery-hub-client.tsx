@@ -150,22 +150,22 @@ export function DeliveryHubClient() {
   );
   const docLinks = [
     {
-      href: "/docs/demo-script.md",
+      href: "/ops/docs#demo-script",
       title: "5분 데모 스크립트",
       copy: "발표 순서와 멘트를 빠르게 다시 맞춥니다.",
     },
     {
-      href: "/docs/submission-checklist.md",
+      href: "/ops/docs#submission-checklist",
       title: "제출 체크리스트",
       copy: "누락 항목과 환경 변수, 점검 포인트를 다시 확인합니다.",
     },
     {
-      href: "/docs/operations-order-runbook.md",
+      href: "/ops/docs#operations-runbook",
       title: "운영/주문 런북",
       copy: "실제 주문과 웹훅 검증 순서를 따라갑니다.",
     },
     {
-      href: "/docs/git-operation-rules.md",
+      href: "/ops/docs#git-rules",
       title: "Git 운영 규칙",
       copy: "작업 브랜치와 기준 PR, merge 기준을 다시 확인합니다.",
     },

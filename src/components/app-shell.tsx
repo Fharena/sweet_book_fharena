@@ -25,7 +25,21 @@ export function AppShell({
 }: AppShellProps) {
   const pathname = usePathname();
   const { draft } = useTripDraft();
-  const activeStepIndex = navSteps.findIndex((step) => step.href === pathname);
+  const activeStepIndex = navSteps.findIndex((step) => {
+    if (step.href === pathname) {
+      return true;
+    }
+
+    if (step.href !== "/" && pathname.startsWith(`${step.href}/`)) {
+      return true;
+    }
+
+    if (step.href === "/ops/webhooks" && pathname.startsWith("/ops/")) {
+      return true;
+    }
+
+    return false;
+  });
   const activeStep = activeStepIndex >= 0 ? activeStepIndex + 1 : 1;
   const isDemoSession = isDemoTripDraft(draft);
   const sessionBadgeLabel = draft

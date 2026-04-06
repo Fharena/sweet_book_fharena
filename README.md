@@ -99,6 +99,7 @@ npm run dev
 
 - `/ops/webhooks`: Sweetbook 웹훅 등록, 테스트 전송, delivery 이력 조회, 수신 로그 확인
 - `/ops/launchpad`: 현재 세션, 테스트 책, 주문 결과, 백엔드 상태를 한 번에 보는 데모/제출 허브
+- `/ops/docs`: 데모 스크립트, 제출 체크리스트, 주문/운영 런북, Git 운영 규칙을 앱 안에서 다시 보는 문서 허브
 - `/checkout`: 테스트 책 생성, 주문 요청, orderUid 또는 bookUid 기준 수신 추적
 - `/api/sweetbook/status`: API Key, Book Specs 연결, 웹훅 설정 여부를 점검하는 상태 API
 
