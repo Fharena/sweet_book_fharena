@@ -42,6 +42,23 @@ export default function TripReviewPage() {
 
     return Array.from(values).slice(0, 6);
   }, [activeDraft]);
+  const classificationSummary = useMemo(
+    () => ({
+      exif: activeDraft?.photos.filter((photo) => photo.locationSource === "exif").length ?? 0,
+      timeCluster:
+        activeDraft?.photos.filter((photo) => photo.locationSource === "time-cluster").length ??
+        0,
+      manual:
+        activeDraft?.photos.filter(
+          (photo) =>
+            photo.locationSource === "manual" && !photo.requiresManualLocationTagging,
+        ).length ?? 0,
+      needsReview:
+        activeDraft?.photos.filter((photo) => photo.requiresManualLocationTagging).length ?? 0,
+      chapters: activeDraft?.chapters.length ?? 0,
+    }),
+    [activeDraft],
+  );
 
   function togglePhotoSelection(photoId: string) {
     setSelectedPhotoIds((current) =>
@@ -155,6 +172,56 @@ export default function TripReviewPage() {
               >
                 미리보기로 바로 이동
               </Link>
+            </div>
+          </article>
+        ) : null}
+
+        {activeDraft ? (
+          <article className="soft-card rounded-[32px] p-5 sm:p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="section-kicker">자동 분류 근거</p>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                  업로드 이후 어떤 사진이 GPS로 바로 정리됐는지, 어떤 사진이 시간대
+                  힌트로 보완됐는지, 그리고 실제로 어느 정도가 수동 보정이 필요한지
+                  한눈에 볼 수 있게 정리했습니다.
+                </p>
+              </div>
+              <div className="rounded-full bg-[rgba(15,118,110,0.12)] px-4 py-2 text-xs font-semibold text-[var(--accent)]">
+                자동 생성 챕터 {classificationSummary.chapters}개
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              {[
+                ["GPS 즉시 분류", classificationSummary.exif, "EXIF 좌표로 바로 묶인 사진"],
+                [
+                  "시간대 보완",
+                  classificationSummary.timeCluster,
+                  "같은 날짜의 인접 사진으로 장소를 보완한 사진",
+                ],
+                [
+                  "수동 태그 완료",
+                  classificationSummary.manual,
+                  "검토 단계에서 직접 보정해 둔 사진",
+                ],
+                [
+                  "보정 대기",
+                  classificationSummary.needsReview,
+                  "아직 위치 태그 확인이 필요한 사진",
+                ],
+              ].map(([label, value, note]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-[24px] border border-[var(--line)] bg-white/82 px-4 py-4"
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    {label}
+                  </p>
+                  <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{note}</p>
+                </div>
+              ))}
             </div>
           </article>
         ) : null}

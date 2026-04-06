@@ -342,6 +342,14 @@ export function CheckoutOrderClient() {
   const estimatedPrice = draft
     ? formatCurrency(derivePrice(pageCount))
     : orderSummary.estimatedPrice;
+  const resolvedLocationCount = draft?.stats.withResolvedLocation ?? 0;
+  const gpsPhotoCount = draft?.stats.withGpsCoordinates ?? 0;
+  const manualTaggingCount = draft?.stats.manualTaggingRequired ?? 0;
+  const manualCorrectedCount =
+    draft?.photos.filter(
+      (photo) =>
+        photo.locationSource === "manual" && !photo.requiresManualLocationTagging,
+    ).length ?? 0;
 
   const [composeResult, setComposeResult] = useState<CheckoutComposeResult | null>(
     () => loadCheckoutComposeResult(),
@@ -872,6 +880,48 @@ export function CheckoutOrderClient() {
                 {composeError}
               </div>
             ) : null}
+          </div>
+
+          <div className="soft-card rounded-[28px] p-5">
+            <p className="section-kicker">출판 전 최종 요약</p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              이 책이 어떤 재료로 만들어졌고, 주문 이후 어떤 기준으로 추적되는지 한눈에
+              확인할 수 있도록 최종 요약을 묶어뒀습니다.
+            </p>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {[
+                ["총 사진 수", photoCount, "현재 draft 전체 사진"],
+                ["챕터 수", chapterCount, "포토북 스프레드 기준"],
+                ["위치 정리", resolvedLocationCount, "장소 라벨이 확정된 사진"],
+                ["GPS 포함", gpsPhotoCount, "지도 카드 후보가 되는 사진"],
+                ["수동 보정 완료", manualCorrectedCount, "검토 단계에서 직접 보정한 사진"],
+                ["보정 대기", manualTaggingCount, "아직 위치 확인이 필요한 사진"],
+              ].map(([label, value, note]) => (
+                <div
+                  key={String(label)}
+                  className="rounded-[24px] border border-[var(--line)] bg-white/82 px-4 py-4"
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                    {label}
+                  </p>
+                  <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{note}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-[24px] border border-[var(--line)] bg-[linear-gradient(145deg,_rgba(255,255,255,0.92),_rgba(247,240,231,0.82))] px-5 py-4 text-sm leading-6 text-slate-700">
+              <p>
+                <span className="font-semibold text-slate-900">선택 테마:</span>{" "}
+                {selectedTheme.name}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">주문 후 추적:</span>{" "}
+                checkout에서 먼저 확인하고, 필요하면 `ops/webhooks`로 이어서 같은
+                orderUid 또는 bookUid 기준 로그를 봅니다.
+              </p>
+            </div>
           </div>
 
           <div className="soft-card rounded-[28px] p-5">

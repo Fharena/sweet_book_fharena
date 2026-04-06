@@ -350,6 +350,15 @@ export default function BookPreviewPage() {
                     )
                 : [];
             const leadGeoPhoto = chapterGeoPhotos[0];
+            const representativePhoto = spreadPhotos[0];
+            const chapterSummaryText =
+              "photoIds" in group
+                ? representativePhoto?.groupingReason ?? group.groupingReason
+                : group.confidence;
+            const chapterDateLabel =
+              "photoIds" in group ? group.dateKey : `${group.day} / ${group.time}`;
+            const chapterPlaceLabel =
+              "photoIds" in group ? group.placeLabel : group.place;
 
             return (
               <article
@@ -359,6 +368,65 @@ export default function BookPreviewPage() {
                 <p className="eyebrow text-[11px] font-semibold">
                   {selectedTheme.spreadEyebrow} / {"photoIds" in group ? group.dayLabel : group.day}
                 </p>
+                <div className="mt-4 rounded-[28px] border border-[var(--line)] bg-[linear-gradient(145deg,_rgba(255,255,255,0.92),_rgba(247,240,231,0.82))] p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="max-w-2xl">
+                      <div className="flex flex-wrap gap-2">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${selectedTheme.badgeClassName}`}
+                        >
+                          챕터 오프너
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                          {chapterDateLabel}
+                        </span>
+                      </div>
+                      <h3 className="mt-4 font-display text-4xl leading-none text-slate-900">
+                        {chapterPlaceLabel}
+                      </h3>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {chapterSummaryText}
+                      </p>
+                    </div>
+
+                    <div className="grid min-w-full gap-3 sm:min-w-[17rem]">
+                      <div
+                        className={`rounded-[24px] border border-[var(--line)] p-4 ${selectedTheme.spotlightClassName}`}
+                      >
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                          지도 카드 무드
+                        </p>
+                        <div className="mt-4 flex items-center gap-2">
+                          {Array.from({
+                            length: Math.max(Math.min(chapterGeoPhotos.length, 4), 1),
+                          }).map((_, dotIndex) => (
+                            <span
+                              key={`${group.title}-map-${dotIndex}`}
+                              className="h-2.5 w-2.5 rounded-full bg-[var(--accent)]"
+                            />
+                          ))}
+                          <span className="text-xs text-slate-500">
+                            {leadGeoPhoto
+                              ? `${formatCoordinate(leadGeoPhoto.coordinates.latitude)}, ${formatCoordinate(
+                                  leadGeoPhoto.coordinates.longitude,
+                                )}`
+                              : "GPS가 없는 장면은 장소명 중심 카드로 연출"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rounded-[24px] border border-[var(--line)] bg-white/86 px-4 py-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                          대표 메모
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">
+                          {representativePhoto?.locationLabel ??
+                            chapterPlaceLabel ??
+                            "장소 정보 확인 중"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div className="mt-4 grid gap-4 md:grid-cols-[1.08fr_0.92fr]">
                   <div
                     className={`grid min-h-48 grid-cols-2 gap-3 rounded-[28px] border border-[var(--line)] p-3 ${selectedTheme.spotlightClassName}`}
