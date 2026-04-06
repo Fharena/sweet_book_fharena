@@ -1,6 +1,9 @@
 export type CheckoutComposeResult = {
   bookUid: string;
   finalizedBook?: unknown;
+  themeLabel?: string;
+  operationCount?: number;
+  contentCount?: number;
   savedAt: string;
 };
 
@@ -71,6 +74,9 @@ export function isCheckoutComposeResult(value: unknown): value is CheckoutCompos
     isObject(value) &&
     isString(value.bookUid) &&
     (typeof value.finalizedBook === "undefined" || value.finalizedBook !== null) &&
+    (typeof value.themeLabel === "undefined" || isString(value.themeLabel)) &&
+    (typeof value.operationCount === "undefined" || typeof value.operationCount === "number") &&
+    (typeof value.contentCount === "undefined" || typeof value.contentCount === "number") &&
     isString(value.savedAt)
   );
 }

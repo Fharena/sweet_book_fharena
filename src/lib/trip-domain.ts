@@ -1,3 +1,5 @@
+import type { TravelThemeId } from "@/lib/travel-themes";
+
 export type PhotoLocationSource = "exif" | "manual" | "time-cluster" | "unknown";
 
 export type GeoPoint = {
@@ -45,6 +47,7 @@ export type TripIntakeResult = {
   tripName: string;
   travelStart: string | null;
   travelEnd: string | null;
+  selectedThemeId: TravelThemeId;
   photos: ImportedPhoto[];
   chapters: TripChapter[];
   stats: TripIntakeStats;
@@ -69,6 +72,7 @@ export type SweetbookBookPlan = {
   dateRange: string;
   bookSpecUid: string;
   themeLabel: string;
+  selectedThemeId: TravelThemeId;
   operations: SweetbookBookPlanOperation[];
 };
 

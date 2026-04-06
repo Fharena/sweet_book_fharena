@@ -17,6 +17,7 @@ import {
   saveCheckoutComposeResult,
   saveCheckoutOrderDraft,
 } from "@/lib/checkout-order";
+import { resolveTravelTheme } from "@/lib/travel-themes";
 
 function derivePrice(pageCount: number) {
   return Math.round(16800 + pageCount * 330);
@@ -27,7 +28,7 @@ function formatCurrency(value: number | null) {
     return "확인 중";
   }
 
-  return `KRW ${value.toLocaleString("ko-KR")}`;
+  return `${value.toLocaleString("ko-KR")}원`;
 }
 
 const defaultOrderDraft: CheckoutOrderDraft = {
@@ -175,6 +176,7 @@ export function CheckoutOrderClient() {
   const { draft, hydrated } = useTripDraft();
   const photoCount = draft?.stats.totalPhotos ?? 0;
   const chapterCount = draft?.chapters.length ?? orderSummary.chapters;
+  const selectedTheme = resolveTravelTheme(draft?.selectedThemeId);
   const pageCount = draft
     ? Math.max(24, chapterCount * 6 + Math.ceil(photoCount / 4) * 2)
     : orderSummary.pages;
@@ -254,8 +256,13 @@ export function CheckoutOrderClient() {
       const payload = (await response.json()) as {
         error?: string;
         bookUid?: string;
+        plan?: {
+          themeLabel?: string;
+          operations?: Array<unknown>;
+        };
         steps?: {
           finalizedBook?: unknown;
+          contentResults?: Array<unknown>;
         };
       };
 
@@ -266,6 +273,9 @@ export function CheckoutOrderClient() {
       const nextResult = {
         bookUid: payload.bookUid,
         finalizedBook: payload.steps?.finalizedBook,
+        themeLabel: payload.plan?.themeLabel,
+        operationCount: payload.plan?.operations?.length,
+        contentCount: payload.steps?.contentResults?.length,
         savedAt: new Date().toISOString(),
       };
 
@@ -367,7 +377,7 @@ export function CheckoutOrderClient() {
 
   return (
     <AppShell
-      eyebrow="Sweetbook Checkout"
+      eyebrow="Sweetbook 주문"
       title={
         draft
           ? `주문 정보를 정리하고 ${draft.tripName} 포토북을 보내는 단계`
@@ -380,8 +390,8 @@ export function CheckoutOrderClient() {
       }
       aside={
         <div className="space-y-4">
-          <div className="soft-card rounded-[28px] p-5">
-            <p className="eyebrow text-[11px] font-semibold">주문 순서</p>
+          <div className="editorial-panel rounded-[28px] p-5">
+            <p className="section-kicker">주문 순서</p>
             <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
               <li>1. 여행 사진을 책으로 조립하고 최종화합니다.</li>
               <li>2. 최종화된 bookUid를 주문 폼에 넣습니다.</li>
@@ -395,54 +405,82 @@ export function CheckoutOrderClient() {
               주문은 `items + shipping + externalRef` 형태로 서버에서 Sweetbook API
               에 전달합니다. 비밀 키는 브라우저로 내려가지 않습니다.
             </p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              현재 선택된 패턴은 <span className="font-semibold text-slate-900">{selectedTheme.name}</span>
+              이고, 이 정보는 책 생성 계획의 메타데이터에도 함께 반영됩니다.
+            </p>
           </div>
 
-          <div className="soft-card rounded-[28px] p-5">
-            <p className="text-sm font-semibold text-slate-900">현재 상태</p>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+          <div className="ink-panel rounded-[28px] p-5 text-white">
+            <p className="text-sm font-semibold text-white">현재 상태</p>
+            <p className="mt-3 text-sm leading-6 text-white/76">
               {composeResult
                 ? `bookUid ${composeResult.bookUid}가 준비되어 있습니다.`
                 : "아직 bookUid가 없으면 먼저 테스트 책 생성을 눌러 주세요."}
             </p>
+            {composeResult?.themeLabel ? (
+              <p className="mt-3 text-sm leading-6 text-white/76">
+                생성 계획 테마: {composeResult.themeLabel}
+              </p>
+            ) : null}
           </div>
         </div>
       }
     >
       {!hydrated ? (
         <div className="soft-card rounded-[28px] p-5 text-sm text-slate-600">
-          여행 draft를 불러오는 중입니다...
+          여행 초안을 불러오는 중입니다...
         </div>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
         <article className="space-y-4">
-          <div className="soft-card rounded-[28px] p-5">
-            <p className="eyebrow text-[11px] font-semibold">Book summary</p>
+          <div className="editorial-panel rounded-[32px] p-5">
+            <p className="section-kicker">책 요약</p>
             <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
               <p>
-                <span className="font-semibold text-slate-900">Product:</span>{" "}
-                {draft ? `Travel photobook for ${draft.tripName}` : orderSummary.product}
+                <span className="font-semibold text-slate-900">상품:</span>{" "}
+                {draft ? `${draft.tripName} 여행 포토북` : orderSummary.product}
               </p>
               <p>
-                <span className="font-semibold text-slate-900">Pages:</span> {pageCount}
+                <span className="font-semibold text-slate-900">예상 페이지:</span> {pageCount}
               </p>
               <p>
-                <span className="font-semibold text-slate-900">Chapters:</span>{" "}
+                <span className="font-semibold text-slate-900">챕터 수:</span>{" "}
                 {chapterCount}
               </p>
               <p>
-                <span className="font-semibold text-slate-900">Estimate:</span>{" "}
+                <span className="font-semibold text-slate-900">예상 금액:</span>{" "}
                 {estimatedPrice}
               </p>
               <p>
-                <span className="font-semibold text-slate-900">Finalized bookUid:</span>{" "}
+                <span className="font-semibold text-slate-900">선택 패턴:</span>{" "}
+                {selectedTheme.name}
+              </p>
+              <p>
+                <span className="font-semibold text-slate-900">최종화된 bookUid:</span>{" "}
                 {form.bookUid.trim() ? form.bookUid : "아직 없습니다"}
               </p>
             </div>
 
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="metric-tile px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 페이지</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{pageCount}</p>
+              </div>
+              <div className="metric-tile px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 금액</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">{estimatedPrice}</p>
+              </div>
+              <div className="metric-tile px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">패턴</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{selectedTheme.name}</p>
+              </div>
+            </div>
+
             <button
               type="button"
-              className="mt-5 w-full rounded-[24px] bg-slate-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="button-primary mt-5 w-full rounded-[24px] px-5 py-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
               onClick={handleComposeBook}
               disabled={isComposing || !draft}
             >
@@ -456,6 +494,20 @@ export function CheckoutOrderClient() {
               </div>
             ) : null}
 
+            {isComposing ? (
+              <div className="mt-4 rounded-[24px] border border-[var(--line)] bg-white/78 px-5 py-4">
+                <p className="text-sm font-semibold text-slate-900">
+                  책 생성 파이프라인을 실행 중입니다.
+                </p>
+                <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                  <li>1. 책 생성</li>
+                  <li>2. 표지 적용</li>
+                  <li>3. 챕터별 내지 삽입</li>
+                  <li>4. 최종화</li>
+                </ol>
+              </div>
+            ) : null}
+
             {composeError ? (
               <div className="mt-4 rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm leading-6 text-rose-700">
                 {composeError}
@@ -464,7 +516,23 @@ export function CheckoutOrderClient() {
           </div>
 
           <div className="soft-card rounded-[28px] p-5">
-            <p className="eyebrow text-[11px] font-semibold">주문 결과</p>
+            <p className="section-kicker">주문 결과</p>
+            {composeResult ? (
+              <div className="mt-4 rounded-[24px] border border-[var(--line)] bg-white/80 px-5 py-4 text-sm leading-6 text-slate-700">
+                <p>
+                  <span className="font-semibold text-slate-900">생성 테마:</span>{" "}
+                  {composeResult.themeLabel ?? selectedTheme.name}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-900">조립 단계 수:</span>{" "}
+                  {composeResult.operationCount ?? "확인 중"}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-900">내지 작업 수:</span>{" "}
+                  {composeResult.contentCount ?? "확인 중"}
+                </p>
+              </div>
+            ) : null}
             {orderResult ? (
               <div className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
                 <p>
@@ -499,9 +567,9 @@ export function CheckoutOrderClient() {
           </div>
         </article>
 
-        <article className="soft-card rounded-[28px] p-5">
+        <article className="editorial-panel rounded-[32px] p-5">
           <div className="flex flex-col gap-3 border-b border-[var(--line)] pb-4">
-            <p className="eyebrow text-[11px] font-semibold">배송지 입력</p>
+            <p className="section-kicker">배송지 입력</p>
             <p className="text-sm leading-6 text-slate-600">
               주문자 정보와 받는 사람 정보를 한 화면에서 정리합니다. compose 결과의
               bookUid가 있으면 자동으로 채워집니다.
@@ -537,7 +605,7 @@ export function CheckoutOrderClient() {
                     className={`w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 ${
                       error
                         ? "border-rose-300 bg-rose-50/40 focus:border-rose-500"
-                        : "border-[var(--line)] bg-white/80 focus:border-slate-500"
+                        : "border-[var(--line)] bg-white/86 focus:border-slate-500"
                     }`}
                   />
                   {error ? (
@@ -550,7 +618,7 @@ export function CheckoutOrderClient() {
 
           <button
             type="button"
-            className="mt-6 w-full rounded-[24px] bg-emerald-600 px-5 py-4 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-300"
+            className="button-primary mt-6 w-full rounded-[24px] px-5 py-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-emerald-300 disabled:shadow-none"
             onClick={handleOrderSubmit}
             disabled={isOrdering}
           >

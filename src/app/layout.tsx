@@ -15,7 +15,7 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: "Triplogue",
   description:
-    "Travel photos become chaptered photobooks with automatic time and location grouping.",
+    "여행 사진을 시간과 위치 기준으로 정리해 포토북 초안과 주문 흐름으로 연결하는 서비스",
 };
 
 export default function RootLayout({
@@ -25,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ko"
       className={`${manrope.variable} ${newsreader.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

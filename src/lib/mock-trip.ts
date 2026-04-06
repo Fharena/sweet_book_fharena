@@ -1,65 +1,54 @@
+import { travelThemes } from "@/lib/travel-themes";
+
 export const navSteps = [
-  { href: "/", label: "Overview" },
-  { href: "/trips/new", label: "Import" },
-  { href: "/trips/review", label: "Review" },
-  { href: "/book/preview", label: "Preview" },
-  { href: "/checkout", label: "Order" },
-  { href: "/ops/webhooks", label: "Webhook Ops" },
+  { href: "/", label: "개요" },
+  { href: "/trips/new", label: "업로드" },
+  { href: "/trips/review", label: "검토" },
+  { href: "/book/preview", label: "미리보기" },
+  { href: "/checkout", label: "주문" },
+  { href: "/ops/webhooks", label: "웹훅 운영" },
 ];
 
 export const tripSummary = {
-  name: "Tokyo Night & Light",
-  travelWindow: "Apr 02 - Apr 06",
-  heroNote: "42 photos imported, 31 geotagged, 5 chapters suggested.",
+  name: "도쿄 나이트 앤 라이트",
+  travelWindow: "2026.04.02 - 2026.04.06",
+  heroNote: "사진 42장, 위치 인식 31장, 추천 챕터 5개가 자동으로 정리됐습니다.",
   locationPolicy:
-    "Galaxy users get the best automatic grouping when Camera > Settings > Location tags is enabled.",
+    "갤럭시에서는 카메라 설정의 위치 태그를 켜 두면 장소 자동 정리가 가장 정확합니다.",
 };
 
 export const timelineGroups = [
   {
-    title: "Shibuya Arrival",
-    day: "Day 1",
+    title: "시부야 도착 첫 저녁",
+    day: "1일차",
     time: "18:10 - 21:20",
-    place: "Shibuya, Tokyo",
+    place: "도쿄 시부야",
     photos: 9,
-    confidence: "92% auto-matched from EXIF GPS",
+    confidence: "EXIF GPS 기준 92% 자동 일치",
   },
   {
-    title: "Asakusa Morning Walk",
-    day: "Day 2",
+    title: "아사쿠사 아침 산책",
+    day: "2일차",
     time: "08:05 - 11:40",
-    place: "Asakusa, Tokyo",
+    place: "도쿄 아사쿠사",
     photos: 11,
-    confidence: "6 photos need manual place tags",
+    confidence: "사진 6장은 수동 위치 태그 필요",
   },
   {
-    title: "Lake Kawaguchi Escape",
-    day: "Day 3",
+    title: "가와구치호로 잠시 벗어난 하루",
+    day: "3일차",
     time: "10:15 - 16:50",
-    place: "Fujikawaguchiko",
+    place: "후지카와구치코",
     photos: 14,
-    confidence: "Merged using time proximity + location hint",
+    confidence: "시간대와 위치 힌트를 합쳐 챕터 병합",
   },
 ];
 
-export const previewThemes = [
-  {
-    name: "Timeline Classic",
-    note: "Date-led spreads with calm captions and structured galleries.",
-  },
-  {
-    name: "Postcard Map",
-    note: "Each chapter opens with a map card, place title, and route accents.",
-  },
-  {
-    name: "Photo Essay",
-    note: "Large editorial imagery with minimal captions for scenic days.",
-  },
-];
+export const previewThemes = travelThemes;
 
 export const orderSummary = {
-  product: "A5 softcover travel photobook",
+  product: "A5 소프트커버 여행 포토북",
   pages: 38,
   chapters: 5,
-  estimatedPrice: "KRW 23,400",
+  estimatedPrice: "23,400원",
 };

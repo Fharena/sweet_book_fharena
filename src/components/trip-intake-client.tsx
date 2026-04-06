@@ -13,6 +13,8 @@ type ManualLocationOverride = {
   locationLabel: string;
 };
 
+type TripPhoto = TripIntakeResult["photos"][number];
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -34,9 +36,51 @@ function getPreviewUrl(file: File) {
   return URL.createObjectURL(file);
 }
 
+function getFileKey(file: File) {
+  return `${file.name}:${file.size}`;
+}
+
+function getPhotoKey(photo: TripPhoto) {
+  return `${photo.fileName}:${photo.size}`;
+}
+
+function formatLocationSource(source: TripPhoto["locationSource"]) {
+  switch (source) {
+    case "exif":
+      return "EXIF 자동";
+    case "manual":
+      return "수동 보정";
+    case "time-cluster":
+      return "시간대 정리";
+    default:
+      return "확인 필요";
+  }
+}
+
+function getLocationToneClass(photo?: TripPhoto) {
+  if (!photo) {
+    return "bg-slate-100 text-slate-700";
+  }
+
+  if (photo.requiresManualLocationTagging) {
+    return "bg-amber-100 text-amber-900";
+  }
+
+  switch (photo.locationSource) {
+    case "exif":
+      return "bg-emerald-100 text-emerald-900";
+    case "manual":
+      return "bg-sky-100 text-sky-900";
+    case "time-cluster":
+      return "bg-indigo-100 text-indigo-900";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}
+
 export function TripIntakeClient() {
   const [files, setFiles] = useState<File[]>([]);
-  const [tripName, setTripName] = useState("Tokyo Night & Light");
+  const [tripName, setTripName] = useState("도쿄 나이트 앤 라이트");
   const [travelStart, setTravelStart] = useState("2026-04-02");
   const [travelEnd, setTravelEnd] = useState("2026-04-06");
   const [manualLocations, setManualLocations] = useState("");
@@ -49,9 +93,32 @@ export function TripIntakeClient() {
     () =>
       files.map((file) => ({
         file,
+        key: getFileKey(file),
         preview: getPreviewUrl(file),
       })),
     [files],
+  );
+
+  const totalSize = useMemo(
+    () => files.reduce((sum, file) => sum + file.size, 0),
+    [files],
+  );
+
+  const manualLocationEntries = useMemo(
+    () =>
+      manualLocations
+        .split("\n")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    [manualLocations],
+  );
+
+  const processedPhotoMap = useMemo(
+    () =>
+      new Map(
+        (result?.photos ?? []).map((photo) => [getPhotoKey(photo), photo]),
+      ),
+    [result],
   );
 
   useEffect(() => {
@@ -60,7 +127,24 @@ export function TripIntakeClient() {
     };
   }, [previewItems]);
 
+  const selectedFileCount = files.length;
   const manualFallbackCount = result?.stats.manualTaggingRequired ?? 0;
+  const gpsCount = result?.stats.withGpsCoordinates ?? 0;
+  const resolvedLocationCount = result?.stats.withResolvedLocation ?? 0;
+  const hasResult = result !== null;
+  const workflowStage = hasResult
+    ? "업로드 완료"
+    : isSubmitting
+      ? "처리 중"
+      : selectedFileCount > 0
+        ? "업로드 대기"
+        : "사진 선택 전";
+
+  const workflowStepStates = [
+    selectedFileCount > 0,
+    hasResult || isSubmitting || selectedFileCount > 0,
+    hasResult,
+  ];
 
   function addFiles(nextFiles: FileList | File[]) {
     const accepted = Array.from(nextFiles).filter((file) =>
@@ -72,11 +156,11 @@ export function TripIntakeClient() {
     }
 
     setFiles((current) => {
-      const seen = new Set(current.map((file) => `${file.name}:${file.size}`));
+      const seen = new Set(current.map((file) => getFileKey(file)));
       const merged = [...current];
 
       for (const file of accepted) {
-        const key = `${file.name}:${file.size}`;
+        const key = getFileKey(file);
         if (!seen.has(key)) {
           merged.push(file);
           seen.add(key);
@@ -102,10 +186,8 @@ export function TripIntakeClient() {
     formData.append("travelStart", travelStart);
     formData.append("travelEnd", travelEnd);
 
-    const overrides = manualLocations
-      .split("\n")
-      .map((value) => value.trim())
-      .filter(Boolean)
+    const overrides = manualLocationEntries
+      .slice(0, files.length)
       .map<ManualLocationOverride>((value, index) => ({
         fileName: files[index]?.name ?? `manual-${index + 1}`,
         locationLabel: value,
@@ -144,99 +226,223 @@ export function TripIntakeClient() {
 
   return (
     <AppShell
-      eyebrow="Frontend Chunk 1"
-      title="Import photos and collect the metadata that matters."
-      description="This step explains the EXIF-first strategy: use Galaxy location tags when they exist, then fall back to manual place tagging for the missing photos."
+      eyebrow="여행 사진 업로드"
+      title="사진을 올리고 포토북 초안의 재료를 정리하는 단계"
+      description="EXIF 중심으로 촬영 시간과 위치를 읽고, 위치 태그가 없는 사진은 수동 보정으로 보완해 다음 단계로 넘깁니다."
       aside={
         <div className="space-y-5">
           <div className="soft-card rounded-[28px] p-5">
-            <p className="eyebrow text-[11px] font-semibold">Photo intake checklist</p>
-            <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
-              <li>Accept JPG, HEIC, and PNG uploads.</li>
-              <li>Read capture time and GPS from EXIF when available.</li>
-              <li>Flag photos with missing location for manual tagging.</li>
-            </ul>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="eyebrow text-[11px] font-semibold">업로드 요약</p>
+                <p className="mt-3 text-2xl font-semibold text-slate-900">
+                  {selectedFileCount > 0
+                    ? `${selectedFileCount}장 준비됨`
+                    : "사진을 아직 고르지 않았어요"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {hasResult
+                    ? `업로드 후 ${resolvedLocationCount}장의 위치가 정리됐고 ${manualFallbackCount}장은 수동 보정이 남았습니다.`
+                    : `총 ${formatBytes(totalSize)} 용량의 사진을 받아 EXIF/GPS 상태를 한눈에 보여줍니다.`}
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  hasResult
+                    ? "bg-emerald-100 text-emerald-900"
+                    : isSubmitting
+                      ? "bg-amber-100 text-amber-900"
+                      : "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {workflowStage}
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="metric-tile px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  사진
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {selectedFileCount}장
+                </p>
+              </div>
+              <div className="metric-tile px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  총 용량
+                </p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {formatBytes(totalSize)}
+                </p>
+              </div>
+              <div className="metric-tile px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  위치 태그
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">
+                  {hasResult
+                    ? `${gpsCount}장 자동 / ${manualFallbackCount}장 보정`
+                    : manualLocationEntries.length > 0
+                      ? `${manualLocationEntries.length}개 보정 후보 입력됨`
+                      : "업로드 후 자동 계산"}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-4 text-xs leading-5 text-slate-500">
+              수동 위치 라벨은 한 줄에 한 장씩, 앞에서부터 순서대로 적용됩니다.
+            </p>
           </div>
 
           <div className="soft-card rounded-[28px] p-5">
-            <p className="text-sm font-semibold text-slate-900">Why this matters</p>
+            <p className="text-sm font-semibold text-slate-900">
+              위치 태그 기대치
+            </p>
             <p className="mt-3 text-sm leading-6 text-slate-600">
               {tripSummary.locationPolicy}
             </p>
+            <div className="mt-4 rounded-[20px] border border-[var(--line)] bg-white px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                데모에서 보여줄 포인트
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">
+                사진 개수, 총 용량, GPS 유무, 수동 보정 대기 상태가 한 화면에서
+                바로 보이도록 설계했습니다.
+              </p>
+            </div>
           </div>
 
           <div className="soft-card rounded-[28px] p-5">
-            <p className="text-sm font-semibold text-slate-900">Manual fallback</p>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              If a batch comes in without GPS, we keep it moving. You can assign a
-              place label later and still continue toward the book preview.
-            </p>
+            <p className="text-sm font-semibold text-slate-900">업로드 흐름</p>
+            <div className="mt-4 space-y-3">
+              {[
+                {
+                  title: "1. 사진 선택",
+                  detail: "JPG, HEIC, PNG를 한 번에 받아 중복은 건너뜁니다.",
+                },
+                {
+                  title: "2. 위치 정리",
+                  detail: "EXIF GPS와 수동 라벨을 함께 써서 장소를 보정합니다.",
+                },
+                {
+                  title: "3. 초안 생성",
+                  detail: "챕터로 묶인 결과를 다음 미리보기 단계로 넘깁니다.",
+                },
+              ].map((step, index) => (
+                <div
+                  key={step.title}
+                  className={`rounded-2xl border px-4 py-3 ${
+                    workflowStepStates[index]
+                      ? "border-[var(--line-strong)] bg-[rgba(15,118,110,0.08)]"
+                      : "border-[var(--line)] bg-white"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-slate-900">
+                    {step.title}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    {step.detail}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       }
     >
       <form className="space-y-6" onSubmit={handleSubmit}>
-        <section className="rounded-[28px] border border-dashed border-[rgba(24,33,40,0.18)] bg-white/70 p-6 sm:p-8">
+        <section className="editorial-panel hero-sheen rounded-[32px] p-6 sm:p-8">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl space-y-4">
-              <p className="eyebrow text-[11px] font-semibold">Upload center</p>
+              <span className="section-kicker">업로드 센터</span>
               <h2 className="font-display text-4xl leading-none text-slate-900">
-                Drop your travel photos here.
+                여행 사진을 올리면 정리 상태가 바로 보입니다.
               </h2>
               <p className="text-sm leading-6 text-slate-600">
-                We keep the first interaction simple: one trip, one upload action,
-                and a clearly visible note that location tags improve automatic
-                grouping.
+                첫 단계는 최대한 단순하게 가져갑니다. 여행 하나, 업로드 한 번,
+                그리고 위치 태그가 자동 그룹핑 정확도를 높여준다는 안내만 또렷하게
+                보여줍니다.
               </p>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  `${files.length} photos queued`,
-                  `${result?.stats.withGpsCoordinates ?? 0} photos with GPS`,
-                  `${manualFallbackCount} photos need manual tagging`,
+                  {
+                    label: "선택된 사진",
+                    value: `${selectedFileCount}장`,
+                    note: hasResult ? "업로드 완료 기준" : "파일을 고르면 즉시 반영",
+                  },
+                  {
+                    label: "총 용량",
+                    value: formatBytes(totalSize),
+                    note: "모바일 업로드 전 확인용",
+                  },
+                  {
+                    label: "위치 태그",
+                    value: hasResult
+                      ? `${gpsCount}장 자동 / ${manualFallbackCount}장 보정`
+                      : "업로드 후 계산",
+                    note:
+                      manualLocationEntries.length > 0
+                        ? `${manualLocationEntries.length}개 수동 라벨 입력`
+                        : "GPS 없는 사진은 수동으로 보완",
+                  },
                 ].map((item) => (
                   <div
-                    key={item}
-                    className="rounded-2xl border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-4 text-sm font-semibold text-slate-700"
+                    key={item.label}
+                    className="metric-tile px-4 py-4 text-sm font-semibold text-slate-700"
                   >
-                    {item}
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      {item.label}
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-slate-900">
+                      {item.value}
+                    </p>
+                    <p className="mt-2 text-xs font-normal leading-5 text-slate-500">
+                      {item.note}
+                    </p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="w-full max-w-md rounded-[24px] border border-[var(--line)] bg-white/80 p-5">
-              <p className="text-sm font-semibold text-slate-900">Trip settings</p>
+            <div className="ink-panel w-full max-w-md rounded-[28px] p-5 text-white">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-semibold text-white">여행 기본 정보</p>
+                <span className="rounded-full bg-white/14 px-3 py-1 text-xs font-semibold text-white/90">
+                  {workflowStage}
+                </span>
+              </div>
               <div className="mt-4 grid gap-3">
                 <label className="grid gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    Trip name
+                  <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/62">
+                    여행 이름
                   </span>
                   <input
-                    className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+                    className="rounded-2xl border border-white/12 bg-white/92 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-white"
                     value={tripName}
                     onChange={(event) => setTripName(event.target.value)}
-                    placeholder="Tokyo Night & Light"
+                    placeholder="도쿄 나이트 앤 라이트"
                   />
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      Start
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/62">
+                      출발일
                     </span>
                     <input
-                      className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+                      className="rounded-2xl border border-white/12 bg-white/92 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-white"
                       value={travelStart}
                       onChange={(event) => setTravelStart(event.target.value)}
                       type="date"
                     />
                   </label>
                   <label className="grid gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      End
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-white/62">
+                      종료일
                     </span>
                     <input
-                      className="rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
+                      className="rounded-2xl border border-white/12 bg-white/92 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-white"
                       value={travelEnd}
                       onChange={(event) => setTravelEnd(event.target.value)}
                       type="date"
@@ -247,22 +453,40 @@ export function TripIntakeClient() {
             </div>
           </div>
 
-          <div className="mt-6 rounded-[24px] border border-[var(--line)] bg-[linear-gradient(180deg,_rgba(21,111,102,0.08),_rgba(255,255,255,0.96))] p-5">
-            <p className="text-sm font-semibold text-slate-900">
-              Galaxy guidance
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-700">
-              On Samsung Galaxy, turn on Camera &gt; Settings &gt; Location tags so
-              EXIF GPS is preserved. If a photo still comes in without location data,
-              we will keep it in the manual tagging lane instead of blocking the trip.
-            </p>
+          <div
+            className={`mt-6 rounded-[24px] border p-5 ${
+              hasResult
+                ? "border-emerald-200 bg-emerald-50/80"
+                : "border-[var(--line)] bg-[linear-gradient(135deg,_rgba(15,118,110,0.12),_rgba(243,123,87,0.1))]"
+            }`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="section-kicker">
+                  {hasResult ? "업로드 후 상태" : "업로드 전 상태"}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  {hasResult
+                    ? `정리된 결과가 보입니다. ${result.chapters.length}개 챕터와 ${resolvedLocationCount}개의 위치 정리가 다음 단계로 이어집니다.`
+                    : "사진을 선택하면 정리 전 상태와 완료 후 상태를 같은 화면에서 비교할 수 있습니다."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700">
+                  {hasResult ? `${result.chapters.length}개 챕터` : "챕터 미생성"}
+                </span>
+                <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700">
+                  {selectedFileCount > 0 ? `${selectedFileCount}장 선택됨` : "사진 대기"}
+                </span>
+              </div>
+            </div>
           </div>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-4">
             <div
-              className="soft-card rounded-[28px] border border-dashed border-[rgba(24,33,40,0.2)] p-6 transition hover:border-slate-400"
+              className="editorial-panel rounded-[32px] border border-dashed border-[rgba(24,33,40,0.2)] p-6 transition hover:border-[var(--line-strong)]"
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault();
@@ -272,19 +496,19 @@ export function TripIntakeClient() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-base font-semibold text-slate-900">
-                    Select images from your trip
+                    여행 사진을 선택해 주세요
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">
-                    JPG, HEIC, and PNG work best for the demo. Drag and drop is
-                    supported, but a file picker is fine too.
+                    데모 기준으로 JPG, HEIC, PNG가 가장 안정적입니다. 드래그 앤 드롭도
+                    가능하고 파일 선택기로 올려도 됩니다.
                   </p>
                 </div>
                 <button
                   type="button"
-                  className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:border-slate-500"
+                  className="button-secondary rounded-full px-4 py-2 text-sm font-semibold text-slate-800"
                   onClick={() => inputRef.current?.click()}
                 >
-                  Choose files
+                  파일 고르기
                 </button>
               </div>
 
@@ -304,36 +528,39 @@ export function TripIntakeClient() {
 
               <label className="mt-5 block">
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Manual fallback labels
+                  위치 라벨 보정(선택)
                 </span>
                 <textarea
                   className="mt-2 min-h-28 w-full rounded-[24px] border border-[var(--line)] bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-500"
                   value={manualLocations}
                   onChange={(event) => setManualLocations(event.target.value)}
-                  placeholder="Optional. One location label per line for photos without GPS."
+                  placeholder="GPS가 없는 사진용 위치 라벨을 한 줄에 하나씩 넣어둘 수 있습니다. 앞에서부터 순서대로 적용됩니다."
                 />
               </label>
 
               <div className="mt-5 flex flex-wrap gap-3">
                 <button
                   type="submit"
-                  className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Processing intake..." : "Submit travel intake"}
+                  {isSubmitting ? "업로드 처리 중..." : "여행 사진 업로드 시작"}
                 </button>
                 <button
                   type="button"
-                  className="rounded-full border border-[var(--line)] bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-500"
+                  className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-700"
                   onClick={() => {
                     setFiles([]);
                     setManualLocations("");
                     setResult(null);
                     setError(null);
                     clearTripDraft();
+                    if (inputRef.current) {
+                      inputRef.current.value = "";
+                    }
                   }}
                 >
-                  Reset batch
+                  배치 초기화
                 </button>
               </div>
 
@@ -344,72 +571,143 @@ export function TripIntakeClient() {
               ) : null}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {previewItems.length > 0 ? (
-                previewItems.map(({ file, preview }) => (
-                  <article
-                    key={`${file.name}:${file.size}`}
-                    className="soft-card overflow-hidden rounded-[28px]"
-                  >
-                    <div
-                      className="h-44 bg-cover bg-center"
-                      style={{ backgroundImage: `url(${preview})` }}
-                    />
-                    <div className="space-y-2 p-4">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {file.name}
-                      </p>
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>{formatBytes(file.size)}</span>
-                        <span>{file.type || "unknown type"}</span>
+                previewItems.map(({ file, key, preview }, index) => {
+                  const processedPhoto = processedPhotoMap.get(key);
+                  const statusLabel = processedPhoto
+                    ? formatLocationSource(processedPhoto.locationSource)
+                    : "업로드 전";
+                  const statusClass = getLocationToneClass(processedPhoto);
+
+                  return (
+                    <article
+                      key={key}
+                      className="editorial-panel overflow-hidden rounded-[28px]"
+                    >
+                      <div className="relative h-44 bg-slate-100">
+                        <div
+                          className="h-full bg-cover bg-center"
+                          style={{ backgroundImage: `url(${preview})` }}
+                        />
+                        <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-3">
+                          <span className="rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white">
+                            #{String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}
+                          >
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div className="absolute inset-x-4 bottom-4 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-800">
+                            {file.type || "알 수 없는 형식"}
+                          </span>
+                          <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-800">
+                            {formatBytes(file.size)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))
+                      <div className="space-y-3 p-4">
+                        <div>
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {file.name}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {processedPhoto
+                              ? `${processedPhoto.dateKey} / ${processedPhoto.locationLabel ?? "위치 정보 없음"}`
+                              : "업로드 전 상태입니다."}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                            {processedPhoto
+                              ? processedPhoto.requiresManualLocationTagging
+                                ? "수동 보정 필요"
+                                : "자동 정리"
+                              : "정리 대기"}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                            순서 {String(index + 1).padStart(2, "0")}
+                          </span>
+                        </div>
+
+                        {processedPhoto ? (
+                          <p className="text-xs leading-5 text-slate-500">
+                            {processedPhoto.groupingReason}
+                          </p>
+                        ) : (
+                          <p className="text-xs leading-5 text-slate-500">
+                            업로드 후 위치와 날짜를 읽고 챕터 후보로 정리합니다.
+                          </p>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
               ) : (
-                <div className="soft-card rounded-[28px] p-6 text-sm leading-6 text-slate-600">
-                  Once you add files, this area becomes the quick intake preview so
-                  you can sanity-check the batch before sending it to the server.
+                <div className="editorial-panel rounded-[28px] p-6 text-sm leading-6 text-slate-600">
+                  파일을 올리면 이 영역이 빠른 업로드 미리보기로 바뀝니다. 서버로 보내기
+                  전에 배치 상태를 한 번 더 눈으로 확인할 수 있습니다.
                 </div>
               )}
             </div>
           </div>
 
           <div className="space-y-4">
-            <article className="soft-card rounded-[28px] p-5">
-              <p className="eyebrow text-[11px] font-semibold">Automatic path</p>
+            <article className="editorial-panel rounded-[28px] p-5">
+              <p className="section-kicker">자동 정리 경로</p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                If EXIF GPS exists, we reverse-map it to a place label and connect
-                it to the nearest travel day automatically.
+                EXIF GPS가 있으면 장소 라벨을 먼저 읽고, 촬영 날짜와 함께 가장 자연스러운
+                여행 챕터 후보로 자동 연결합니다.
               </p>
             </article>
 
-            <article className="soft-card rounded-[28px] p-5">
-              <p className="eyebrow text-[11px] font-semibold">Fallback path</p>
+            <article className="editorial-panel rounded-[28px] p-5">
+              <p className="section-kicker">수동 보정 경로</p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
-                Missing GPS is not a blocker. Users can tag several photos at once
-                with one place label before continuing to review.
+                GPS가 없는 사진은 막히지 않고 그대로 넘어갑니다. 검토 단계에서 한 장소
+                태그를 여러 장에 한 번에 적용할 수 있습니다.
+              </p>
+            </article>
+
+            <article className="editorial-panel rounded-[28px] p-5">
+              <p className="section-kicker">
+                {hasResult ? "업로드 완료" : "업로드 전"}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                  {hasResult ? "정리 결과 생성됨" : "정리 결과 대기"}
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                  {selectedFileCount > 0
+                    ? `${selectedFileCount}장 업로드 준비됨`
+                    : "사진 선택 필요"}
+                </span>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-slate-600">
+                {hasResult
+                  ? `${result.chapters.length}개 챕터와 ${result.photos.length}장의 사진이 포토북 초안으로 넘어갈 준비가 됐습니다.`
+                  : "파일을 선택하면 업로드 전/후 상태 전환이 이 카드에서 바로 드러납니다."}
               </p>
             </article>
 
             {result ? (
               <div className="space-y-4">
                 <article className="soft-card rounded-[28px] p-5">
-                  <p className="text-base font-semibold text-slate-900">
-                    Intake summary
-                  </p>
+                  <p className="section-kicker">업로드 요약</p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {[
-                      ["Trip", result.tripName],
-                      ["Photos", String(result.stats.totalPhotos)],
-                      ["Chapters", String(result.chapters.length)],
+                      ["여행", result.tripName],
+                      ["사진", String(result.stats.totalPhotos)],
+                      ["챕터", String(result.chapters.length)],
                       ["GPS", String(result.stats.withGpsCoordinates)],
-                      ["Manual tags", String(result.stats.manualTaggingRequired)],
+                      ["수동 태그", String(result.stats.manualTaggingRequired)],
+                      ["위치 정리", String(result.stats.withResolvedLocation)],
                     ].map(([label, value]) => (
-                      <div
-                        key={label}
-                        className="rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-4"
-                      >
+                      <div key={label} className="metric-tile px-4 py-4">
                         <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                           {label}
                         </p>
@@ -422,14 +720,12 @@ export function TripIntakeClient() {
                 </article>
 
                 <article className="soft-card rounded-[28px] p-5">
-                  <p className="text-base font-semibold text-slate-900">
-                    Chapter suggestions
-                  </p>
+                  <p className="section-kicker">추천 챕터</p>
                   <div className="mt-4 space-y-3">
                     {result.chapters.map((chapter) => (
                       <div
                         key={chapter.id}
-                        className="rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-4"
+                        className="editorial-panel rounded-2xl px-4 py-4"
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
@@ -441,7 +737,7 @@ export function TripIntakeClient() {
                             </p>
                           </div>
                           <div className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-                            {chapter.photoCount} photos
+                            사진 {chapter.photoCount}장
                           </div>
                         </div>
                         <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -453,28 +749,26 @@ export function TripIntakeClient() {
                 </article>
 
                 <article className="soft-card rounded-[28px] p-5">
-                  <p className="text-base font-semibold text-slate-900">
-                    Photo quality breakdown
-                  </p>
+                  <p className="section-kicker">사진 상태 미리보기</p>
                   <div className="mt-4 space-y-3">
                     {result.photos.slice(0, 6).map((photo) => (
-                      <div
-                        key={photo.id}
-                        className="rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-4"
-                      >
+                      <div key={photo.id} className="metric-tile px-4 py-4">
                         <div className="flex items-center justify-between gap-4">
                           <div>
                             <p className="text-sm font-semibold text-slate-900">
                               {photo.fileName}
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
-                              {photo.dateKey} / {photo.locationLabel ?? "No location"}
+                              {photo.dateKey} / {photo.locationLabel ?? "위치 정보 없음"}
                             </p>
                           </div>
                           <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-semibold text-white">
-                            {photo.locationSource}
+                            {formatLocationSource(photo.locationSource)}
                           </span>
                         </div>
+                        <p className="mt-3 text-xs leading-5 text-slate-500">
+                          {photo.groupingReason}
+                        </p>
                       </div>
                     ))}
                   </div>

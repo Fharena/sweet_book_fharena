@@ -22,50 +22,120 @@ export function AppShell({
   aside,
 }: AppShellProps) {
   const pathname = usePathname();
+  const activeStepIndex = navSteps.findIndex((step) => step.href === pathname);
+  const activeStep = activeStepIndex >= 0 ? activeStepIndex + 1 : 1;
 
   return (
     <div className="relative min-h-screen overflow-hidden px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,_rgba(21,111,102,0.18),_transparent_55%)]" />
-      <div className="pointer-events-none absolute right-8 top-20 h-48 w-48 rounded-full bg-[rgba(223,199,173,0.28)] blur-3xl" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-96 bg-[radial-gradient(circle_at_top,_rgba(15,118,110,0.16),_transparent_58%)]" />
+      <div className="pointer-events-none absolute left-[-4rem] top-28 h-44 w-44 rounded-full bg-[rgba(243,123,87,0.14)] blur-3xl" />
+      <div className="pointer-events-none absolute right-8 top-20 h-56 w-56 rounded-full bg-[rgba(232,199,163,0.34)] blur-3xl float-orb" />
+      <div className="pointer-events-none absolute bottom-16 right-[12%] h-36 w-36 rounded-full bg-[rgba(15,118,110,0.12)] blur-3xl float-orb" />
+      <div className="pointer-events-none absolute left-[14%] top-[22rem] h-48 w-48 rounded-full border border-dashed border-[rgba(15,118,110,0.12)]" />
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="glass-panel rounded-[28px] px-6 py-5 sm:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-3">
-              <p className="eyebrow text-xs font-semibold">Triplogue / Sweetbook</p>
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 rise-in">
+        <header className="glass-panel hero-sheen rounded-[32px] px-6 py-5 sm:px-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] pb-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="gradient-chip rounded-full px-3 py-1 text-[11px] font-semibold tracking-[0.22em] text-[var(--accent)]">
+                TRIPLOGUE / SWEETBOOK
+              </span>
+              <span className="rounded-full border border-[var(--line)] bg-white/65 px-3 py-1 text-xs font-medium text-[var(--ink-soft)]">
+                여행 포토북 빌더
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--ink-soft)]">
+              <span className="section-kicker">Seafoam 테마</span>
+              <span className="rounded-full border border-[var(--line)] bg-white/70 px-3 py-1 font-semibold">
+                단계 {activeStep} / {navSteps.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-5">
+              <p className="eyebrow text-xs font-semibold">{eyebrow}</p>
               <div>
-                <h1 className="font-display text-4xl leading-none sm:text-5xl">
+                <h1 className="max-w-3xl font-display text-4xl leading-none sm:text-5xl lg:text-[3.7rem]">
                   {title}
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
                   {description}
                 </p>
               </div>
+
+              <div className="flex flex-wrap gap-3">
+                {[
+                  "위치 기반 자동 정리",
+                  "갤럭시 위치 태그 안내",
+                  "Sweetbook 주문 연결",
+                ].map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[var(--line)] bg-white/72 px-4 py-2 text-xs font-semibold text-[var(--ink-soft)]"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
             </div>
 
-            <div className="rounded-[24px] border border-[var(--line)] bg-white/70 px-4 py-4 sm:min-w-72">
-              <p className="eyebrow text-[11px] font-semibold">{eyebrow}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                Travel photos are grouped by capture time and location first, then
-                turned into a Sweetbook-ready layout.
+            <div className="ink-panel rounded-[32px] px-5 py-5 text-white">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold">이번 화면의 역할</p>
+                <span className="travel-badge rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/82">
+                  현재 흐름
+                </span>
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-white/78">
+                여행 사진을 시간과 위치 기준으로 정리하고, 위치가 비는 사진은 수동 보정한 뒤 Sweetbook 주문 플로우로 연결합니다.
               </p>
+
+              <div className="mt-5 grid gap-3">
+                {[
+                  ["01", "사진과 EXIF를 읽고"],
+                  ["02", "챕터 후보를 정리한 뒤"],
+                  ["03", "포토북과 주문으로 마무리"],
+                ].map(([step, copy]) => (
+                  <div
+                    key={step}
+                    className="travel-badge flex items-center gap-3 rounded-[20px] px-4 py-3"
+                  >
+                    <span className="rounded-full bg-white/14 px-2.5 py-1 text-[11px] font-semibold tracking-[0.16em] text-white/88">
+                      {step}
+                    </span>
+                    <span className="text-sm text-white/82">{copy}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           <nav className="mt-6 flex flex-wrap gap-2">
-            {navSteps.map((step) => {
+            {navSteps.map((step, index) => {
               const isActive = pathname === step.href;
 
               return (
                 <Link
                   key={step.href}
                   href={step.href}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
+                  className={`group rounded-full border px-4 py-2.5 text-sm font-medium transition ${
                     isActive
-                      ? "border-transparent bg-slate-950 text-white"
-                      : "border-[var(--line)] bg-white/75 text-slate-700 hover:border-slate-400"
+                      ? "border-transparent bg-slate-950 text-white shadow-[0_10px_22px_rgba(15,23,42,0.18)]"
+                      : "border-[var(--line)] bg-white/75 text-slate-700 hover:border-slate-400 hover:bg-white"
                   }`}
                 >
+                  <span
+                    className={`mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${
+                      isActive
+                        ? "bg-white/12 text-white"
+                        : "bg-[var(--accent-soft)] text-[var(--accent)] group-hover:bg-[var(--accent-secondary-soft)] group-hover:text-[var(--accent-secondary)]"
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
                   {step.label}
                 </Link>
               );

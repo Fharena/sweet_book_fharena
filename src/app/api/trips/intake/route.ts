@@ -28,12 +28,12 @@ export async function POST(request: Request) {
 
   if (files.length === 0) {
     return NextResponse.json(
-      { error: "At least one image file is required." },
+      { error: "최소 한 장의 이미지 파일이 필요합니다." },
       { status: 400 },
     );
   }
 
-  const tripName = String(formData.get("tripName") || "Untitled Trip");
+  const tripName = String(formData.get("tripName") || "이름 없는 여행");
   const travelStart = formData.get("travelStart");
   const travelEnd = formData.get("travelEnd");
   const manualOverrides = parseManualOverrides(formData.get("manualLocations"));

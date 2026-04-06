@@ -1,3 +1,10 @@
+import type { PhotoLocationSource } from "@/lib/trip-domain";
+import { groupPhotosIntoTrip } from "@/lib/trip-grouping";
+import {
+  isTravelThemeId,
+  type TravelThemeId,
+} from "@/lib/travel-themes";
+
 export type TripDraftPhoto = {
   id: string;
   assetId: string | null;
@@ -9,7 +16,7 @@ export type TripDraftPhoto = {
   dateKey: string;
   coordinates: { latitude: number; longitude: number } | null;
   locationLabel: string | null;
-  locationSource: string;
+  locationSource: PhotoLocationSource;
   requiresManualLocationTagging: boolean;
   groupingReason: string;
 };
@@ -22,7 +29,7 @@ export type TripDraftChapter = {
   placeLabel: string;
   photoIds: string[];
   photoCount: number;
-  locationSource: string;
+  locationSource: PhotoLocationSource;
   groupingReason: string;
 };
 
@@ -38,6 +45,7 @@ export type TripDraft = {
   tripName: string;
   travelStart: string | null;
   travelEnd: string | null;
+  selectedThemeId: TravelThemeId;
   photos: TripDraftPhoto[];
   chapters: TripDraftChapter[];
   stats: TripDraftStats;
@@ -105,6 +113,7 @@ export function isTripDraft(value: unknown): value is TripDraft {
     typeof value.tripName === "string" &&
     (typeof value.travelStart === "string" || value.travelStart === null) &&
     (typeof value.travelEnd === "string" || value.travelEnd === null) &&
+    isTravelThemeId(value.selectedThemeId) &&
     Array.isArray(value.photos) &&
     value.photos.every(isTripDraftPhoto) &&
     Array.isArray(value.chapters) &&
@@ -147,4 +156,53 @@ export function clearTripDraft() {
 
   window.sessionStorage.removeItem(TRIP_DRAFT_STORAGE_KEY);
   window.dispatchEvent(new Event(TRIP_DRAFT_STORAGE_EVENT));
+}
+
+export function applyManualLocationTagToDraft(
+  draft: TripDraft,
+  photoIds: string[],
+  locationLabel: string,
+) {
+  const normalizedLocationLabel = locationLabel.trim();
+
+  if (!normalizedLocationLabel || photoIds.length === 0) {
+    return draft;
+  }
+
+  const selectedPhotoIds = new Set(photoIds);
+  const nextPhotos = draft.photos.map((photo) => {
+    if (!selectedPhotoIds.has(photo.id)) {
+      return photo;
+    }
+
+    return {
+      ...photo,
+      locationLabel: normalizedLocationLabel,
+      locationSource: "manual" as PhotoLocationSource,
+      requiresManualLocationTagging: false,
+      groupingReason: `검토 단계에서 "${normalizedLocationLabel}" 위치 라벨로 수동 보정했습니다.`,
+    };
+  });
+
+  const regroupedDraft = groupPhotosIntoTrip(
+    draft.tripName,
+    draft.travelStart,
+    draft.travelEnd,
+    nextPhotos,
+  );
+
+  return {
+    ...regroupedDraft,
+    selectedThemeId: draft.selectedThemeId,
+  };
+}
+
+export function applyThemeSelectionToDraft(
+  draft: TripDraft,
+  selectedThemeId: TravelThemeId,
+) {
+  return {
+    ...draft,
+    selectedThemeId,
+  };
 }

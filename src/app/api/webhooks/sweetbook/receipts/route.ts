@@ -8,13 +8,28 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const limitParam = searchParams.get("limit");
-    const limit = limitParam ? Number(limitParam) : 20;
+    const statusParam = searchParams.get("status");
+    const deliveryUid = searchParams.get("deliveryUid");
+    const duplicateOnly = searchParams.get("duplicateOnly");
+    const normalizedStatus =
+      statusParam === "verified" ||
+      statusParam === "invalid-signature" ||
+      statusParam === "missing-secret"
+        ? statusParam
+        : "all";
+    const normalizedLimit = limitParam ? Number(limitParam) : 20;
 
-    const items = await listWebhookReceipts(limit);
+    const payload = await listWebhookReceipts({
+      limit: Number.isFinite(normalizedLimit) ? normalizedLimit : 20,
+      status: normalizedStatus,
+      deliveryUid,
+      duplicateOnly: duplicateOnly === "true",
+    });
 
     return NextResponse.json({
       data: {
-        items,
+        items: payload.items,
+        summary: payload.summary,
       },
     });
   } catch (error) {
