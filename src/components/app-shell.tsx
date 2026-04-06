@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { isDemoTripDraft } from "@/lib/demo-trip-draft";
 import { navSteps } from "@/lib/mock-trip";
+import { useTripDraft } from "@/lib/use-trip-draft";
 
 type AppShellProps = {
   eyebrow: string;
@@ -22,8 +24,32 @@ export function AppShell({
   aside,
 }: AppShellProps) {
   const pathname = usePathname();
+  const { draft } = useTripDraft();
   const activeStepIndex = navSteps.findIndex((step) => step.href === pathname);
   const activeStep = activeStepIndex >= 0 ? activeStepIndex + 1 : 1;
+  const isDemoSession = isDemoTripDraft(draft);
+  const sessionBadgeLabel = draft
+    ? isDemoSession
+      ? "샘플 초안 세션"
+      : "실사진 draft 세션"
+    : "초안 없음";
+  const sessionBadgeClassName = draft
+    ? isDemoSession
+      ? "bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]"
+      : "bg-[var(--accent-soft)] text-[var(--accent)]"
+    : "bg-slate-100 text-slate-600";
+  const workflowChips = draft
+    ? [
+        isDemoSession ? "샘플 초안 이어보기" : `${draft.tripName} draft 활성`,
+        "갤럭시 위치 태그 안내",
+        "Sweetbook 주문 연결",
+      ]
+    : ["위치 기반 자동 정리", "갤럭시 위치 태그 안내", "Sweetbook 주문 연결"];
+  const flowSummary = draft
+    ? isDemoSession
+      ? `${draft.tripName} 샘플 초안을 기준으로 검토, 미리보기, 주문, 웹훅 운영 흐름이 이어지고 있습니다.`
+      : `${draft.tripName} 여행 초안이 현재 세션에 저장돼 있어 다음 단계까지 같은 흐름으로 이어집니다.`
+    : "여행 사진을 시간과 위치 기준으로 정리하고, 위치가 비는 사진은 수동 보정한 뒤 Sweetbook 주문 플로우로 연결합니다.";
 
   return (
     <div className="relative min-h-screen overflow-hidden px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
@@ -47,6 +73,11 @@ export function AppShell({
 
             <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--ink-soft)]">
               <span className="section-kicker">Seafoam 테마</span>
+              <span
+                className={`rounded-full px-3 py-1 font-semibold ${sessionBadgeClassName}`}
+              >
+                {sessionBadgeLabel}
+              </span>
               <span className="rounded-full border border-[var(--line)] bg-white/70 px-3 py-1 font-semibold">
                 단계 {activeStep} / {navSteps.length}
               </span>
@@ -66,11 +97,7 @@ export function AppShell({
               </div>
 
               <div className="flex flex-wrap gap-3">
-                {[
-                  "위치 기반 자동 정리",
-                  "갤럭시 위치 태그 안내",
-                  "Sweetbook 주문 연결",
-                ].map((item) => (
+                {workflowChips.map((item) => (
                   <span
                     key={item}
                     className="rounded-full border border-[var(--line)] bg-white/72 px-4 py-2 text-xs font-semibold text-[var(--ink-soft)]"
@@ -90,7 +117,7 @@ export function AppShell({
               </div>
 
               <p className="mt-4 text-sm leading-6 text-white/78">
-                여행 사진을 시간과 위치 기준으로 정리하고, 위치가 비는 사진은 수동 보정한 뒤 Sweetbook 주문 플로우로 연결합니다.
+                {flowSummary}
               </p>
 
               <div className="mt-5 grid gap-3">
