@@ -55,6 +55,14 @@ export const CHECKOUT_ORDER_DRAFT_KEY = "triplogue:checkout-order-draft";
 export const CHECKOUT_ORDER_RESULT_KEY = "triplogue:checkout-order-result";
 export const CHECKOUT_SESSION_STORAGE_EVENT = "triplogue:checkout-changed";
 
+const sessionSnapshotCache = new Map<
+  string,
+  {
+    rawValue: string | null | undefined;
+    parsedValue: unknown;
+  }
+>();
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -69,14 +77,32 @@ function readSessionValue<T>(key: string, validator: (value: unknown) => value i
   }
 
   const rawValue = window.sessionStorage.getItem(key);
+  const cachedEntry = sessionSnapshotCache.get(key);
+
+  if (cachedEntry && cachedEntry.rawValue === rawValue) {
+    return validator(cachedEntry.parsedValue) ? (cachedEntry.parsedValue as T) : null;
+  }
+
   if (!rawValue) {
+    sessionSnapshotCache.set(key, {
+      rawValue,
+      parsedValue: null,
+    });
     return null;
   }
 
   try {
     const parsed = JSON.parse(rawValue) as unknown;
+    sessionSnapshotCache.set(key, {
+      rawValue,
+      parsedValue: parsed,
+    });
     return validator(parsed) ? parsed : null;
   } catch {
+    sessionSnapshotCache.set(key, {
+      rawValue,
+      parsedValue: null,
+    });
     return null;
   }
 }

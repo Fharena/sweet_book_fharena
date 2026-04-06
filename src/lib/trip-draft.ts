@@ -54,6 +54,9 @@ export type TripDraft = {
 export const TRIP_DRAFT_STORAGE_KEY = "triplogue:intake";
 export const TRIP_DRAFT_STORAGE_EVENT = "triplogue:draft-changed";
 
+let cachedDraftRawValue: string | null | undefined;
+let cachedDraftValue: TripDraft | null = null;
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -128,14 +131,23 @@ export function loadTripDraft(): TripDraft | null {
   }
 
   const rawValue = window.sessionStorage.getItem(TRIP_DRAFT_STORAGE_KEY);
+  if (rawValue === cachedDraftRawValue) {
+    return cachedDraftValue;
+  }
+
+  cachedDraftRawValue = rawValue;
+
   if (!rawValue) {
+    cachedDraftValue = null;
     return null;
   }
 
   try {
     const parsed = JSON.parse(rawValue) as unknown;
-    return isTripDraft(parsed) ? parsed : null;
+    cachedDraftValue = isTripDraft(parsed) ? parsed : null;
+    return cachedDraftValue;
   } catch {
+    cachedDraftValue = null;
     return null;
   }
 }
