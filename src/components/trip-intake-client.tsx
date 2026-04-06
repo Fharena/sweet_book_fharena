@@ -535,6 +535,21 @@ export function TripIntakeClient() {
                 }}
               />
 
+              <label
+                htmlFor="trip-photo-picker"
+                className="mt-5 flex cursor-pointer flex-col gap-2 rounded-[24px] border border-dashed border-[var(--line-strong)] bg-white/84 px-5 py-5 transition hover:border-[rgba(15,118,110,0.32)] hover:bg-white"
+              >
+                <span className="text-sm font-semibold text-slate-900">
+                  모바일에서는 이 영역을 눌러 사진을 고르는 방식이 가장 안정적입니다.
+                </span>
+                <span className="text-sm leading-6 text-slate-600">
+                  갤러리나 파일 선택기가 바로 열리고, 여러 장을 한 번에 고를 수 있습니다.
+                </span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+                  탭해서 사진 선택
+                </span>
+              </label>
+
               <label className="mt-5 block">
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   위치 라벨 보정(선택)
