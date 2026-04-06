@@ -77,7 +77,6 @@ type SelectedUploadFile = {
   key: string;
   file: File;
   displayName: string;
-  previewUrl: string;
 };
 
 const studioSteps: Array<{
@@ -198,6 +197,10 @@ function getRequestedStep(value: string | null): StudioStepId | null {
   }
 }
 
+function getFileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
 function isAcceptedImageFile(file: File) {
   return file.size >= 0;
 }
@@ -228,10 +231,9 @@ function normalizeSelectedFile(file: File, index: number) {
     `mobile-photo-${Date.now()}-${index + 1}${getFallbackImageExtension(file)}`;
 
   return {
-    key: `${displayName}:${file.size}:${file.lastModified}:${index}`,
+    key: `${index}-${getFileKey(file) || displayName}`,
     file,
     displayName,
-    previewUrl: URL.createObjectURL(file),
   } satisfies SelectedUploadFile;
 }
 
@@ -546,14 +548,6 @@ export function StudioClient() {
     () => selectedUploads.map((item) => item.file),
     [selectedUploads],
   );
-
-  useEffect(() => {
-    return () => {
-      selectedUploads.forEach((item) => {
-        URL.revokeObjectURL(item.previewUrl);
-      });
-    };
-  }, [selectedUploads]);
 
   useEffect(() => {
     setComposeResult(loadCheckoutComposeResult());
@@ -1322,12 +1316,9 @@ export function StudioClient() {
                       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                         {selectedUploads.map((item) => (
                           <div key={item.key} className="overflow-hidden rounded-[26px] border border-[var(--line)] bg-white">
-                            <div
-                              className="relative h-44 bg-slate-100 bg-cover bg-center"
-                              style={{ backgroundImage: `url(${item.previewUrl})` }}
-                            >
-                              <div className="absolute inset-0 bg-[linear-gradient(180deg,_rgba(15,23,42,0.04),_rgba(15,23,42,0.58))]" />
-                              <div className="absolute inset-x-0 bottom-0 p-4 text-white">
+                            <div className="relative flex h-44 items-end bg-[linear-gradient(160deg,_rgba(15,23,42,0.94),_rgba(15,118,110,0.56))] p-4 text-white">
+                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.16),_transparent_42%)]" />
+                              <div className="relative inset-x-0 bottom-0 text-white">
                                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/72">
                                   선택된 사진
                                 </p>
