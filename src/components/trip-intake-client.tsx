@@ -357,10 +357,10 @@ export function TripIntakeClient() {
     >
       <form className="space-y-6" onSubmit={handleSubmit}>
         <section className="editorial-panel hero-sheen rounded-[32px] p-6 sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-2xl min-w-0 space-y-4">
               <span className="section-kicker">업로드 센터</span>
-              <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.7rem]">
+              <h2 className="display-title max-w-xl text-slate-900">
                 여행 사진을 올리면 정리 상태가 바로 보입니다.
               </h2>
               <p className="text-sm leading-6 text-slate-600">
@@ -369,7 +369,7 @@ export function TripIntakeClient() {
                 보여줍니다.
               </p>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {[
                   {
                     label: "선택된 사진",
@@ -410,7 +410,7 @@ export function TripIntakeClient() {
               </div>
             </div>
 
-            <div className="ink-panel w-full max-w-md rounded-[28px] p-5 text-white">
+            <div className="ink-panel w-full rounded-[28px] p-5 text-white xl:max-w-md">
               <div className="flex items-center justify-between gap-4">
                 <p className="text-sm font-semibold text-white">여행 기본 정보</p>
                 <span className="rounded-full bg-white/14 px-3 py-1 text-xs font-semibold text-white/90">
@@ -580,7 +580,7 @@ export function TripIntakeClient() {
               ) : null}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {previewItems.length > 0 ? (
                 previewItems.map(({ file, key, preview }, index) => {
                   const processedPhoto = processedPhotoMap.get(key);

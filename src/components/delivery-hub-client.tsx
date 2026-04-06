@@ -110,6 +110,66 @@ export function DeliveryHubClient() {
         : "아직 주문 요청 전입니다.",
     },
   ];
+  const nextActions = [
+    !draft
+      ? {
+          title: "여행 세션 준비",
+          copy: "샘플 세션을 다시 불러오거나 실사진 업로드부터 시작해 현재 기준 draft를 만듭니다.",
+          href: "/trips/new",
+        }
+      : null,
+    draft && (draft.stats.manualTaggingRequired ?? 0) > 0
+      ? {
+          title: "위치 보정 마무리",
+          copy: "검토 화면에서 위치가 비는 사진을 태깅해 포토북 흐름을 더 안정적으로 만듭니다.",
+          href: "/trips/review",
+        }
+      : null,
+    !composeResult?.bookUid
+      ? {
+          title: "테스트 책 생성",
+          copy: "checkout에서 Sweetbook 테스트 책을 만들어 실제 bookUid를 확보합니다.",
+          href: "/checkout",
+        }
+      : null,
+    composeResult?.bookUid && !orderResult?.orderUid
+      ? {
+          title: "주문 결과 확보",
+          copy: "배송지 입력 후 주문 요청을 보내고 orderUid를 운영 추적 기준으로 확보합니다.",
+          href: "/checkout",
+        }
+      : null,
+  ].filter(
+    (
+      item,
+    ): item is {
+      title: string;
+      copy: string;
+      href: string;
+    } => Boolean(item),
+  );
+  const docLinks = [
+    {
+      href: "/docs/demo-script.md",
+      title: "5분 데모 스크립트",
+      copy: "발표 순서와 멘트를 빠르게 다시 맞춥니다.",
+    },
+    {
+      href: "/docs/submission-checklist.md",
+      title: "제출 체크리스트",
+      copy: "누락 항목과 환경 변수, 점검 포인트를 다시 확인합니다.",
+    },
+    {
+      href: "/docs/operations-order-runbook.md",
+      title: "운영/주문 런북",
+      copy: "실제 주문과 웹훅 검증 순서를 따라갑니다.",
+    },
+    {
+      href: "/docs/git-operation-rules.md",
+      title: "Git 운영 규칙",
+      copy: "작업 브랜치와 기준 PR, merge 기준을 다시 확인합니다.",
+    },
+  ];
 
   function handleLoadDemoFlow() {
     startTransition(() => {
@@ -132,10 +192,10 @@ export function DeliveryHubClient() {
   return (
     <div className="space-y-6">
       <section className="editorial-panel rounded-[32px] p-6 sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-2xl space-y-4">
             <p className="section-kicker">제출/데모 허브</p>
-            <h2 className="max-w-2xl font-display text-3xl text-slate-900 sm:text-[2.9rem]">
+            <h2 className="display-title max-w-2xl text-slate-900">
               지금 세션이 어디까지 왔는지 한 화면에서 확인합니다.
             </h2>
             <p className="text-sm leading-7 text-slate-600 sm:text-base">
@@ -145,7 +205,7 @@ export function DeliveryHubClient() {
             </p>
           </div>
 
-          <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-md lg:grid-cols-1">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:max-w-md xl:grid-cols-1">
             <button
               type="button"
               className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
@@ -314,6 +374,65 @@ export function DeliveryHubClient() {
             </Link>
           ))}
         </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <article className="soft-card rounded-[32px] p-6">
+          <div className="flex flex-col gap-3 border-b border-[var(--line)] pb-4">
+            <p className="section-kicker">지금 바로 할 일</p>
+            <p className="text-sm leading-6 text-slate-600">
+              현재 세션 상태를 기준으로 다음 작업을 자동으로 좁혀 보여줍니다.
+            </p>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {nextActions.length ? (
+              nextActions.map((action) => (
+                <Link
+                  key={`${action.href}-${action.title}`}
+                  href={action.href}
+                  className="soft-card block rounded-[28px] p-5 transition hover:-translate-y-0.5"
+                >
+                  <p className="text-lg font-semibold text-slate-900">{action.title}</p>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{action.copy}</p>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+                    {action.href}
+                  </p>
+                </Link>
+              ))
+            ) : (
+              <div className="rounded-[28px] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] px-5 py-5 text-sm leading-6 text-slate-700">
+                주요 흐름이 모두 한 번씩 준비된 상태입니다. 이제 브라우저 실검증과 제출
+                직전 문서 점검만 진행하면 됩니다.
+              </div>
+            )}
+          </div>
+        </article>
+
+        <article className="soft-card rounded-[32px] p-6">
+          <div className="flex flex-col gap-3 border-b border-[var(--line)] pb-4">
+            <p className="section-kicker">제출 문서</p>
+            <p className="text-sm leading-6 text-slate-600">
+              발표와 제출 직전에 다시 열어볼 문서를 한곳에 묶었습니다.
+            </p>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {docLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="soft-card block rounded-[28px] p-5 transition hover:-translate-y-0.5"
+              >
+                <p className="text-lg font-semibold text-slate-900">{item.title}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{item.copy}</p>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+                  {item.href}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </article>
       </section>
     </div>
   );

@@ -42,12 +42,12 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family:
-    var(--font-manrope),
     "Pretendard Variable",
     Pretendard,
     "Noto Sans KR",
     "Apple SD Gothic Neo",
     "Malgun Gothic",
+    var(--font-manrope),
     sans-serif;
   background-image:
     radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.88), transparent 24%),
@@ -92,17 +92,71 @@ a {
 
 .font-display {
   font-family:
-    var(--font-manrope),
     "Pretendard Variable",
     Pretendard,
     "Noto Sans KR",
     "Apple SD Gothic Neo",
     "Malgun Gothic",
+    var(--font-manrope),
     sans-serif;
-  letter-spacing: -0.04em;
-  line-height: 1.08;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
   text-wrap: balance;
   word-break: keep-all;
+}
+
+.display-hero {
+  font-family:
+    "Pretendard Variable",
+    Pretendard,
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    var(--font-manrope),
+    sans-serif;
+  font-size: clamp(2.15rem, 4.9vw, 4.35rem);
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.display-title {
+  font-family:
+    "Pretendard Variable",
+    Pretendard,
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    var(--font-manrope),
+    sans-serif;
+  font-size: clamp(1.9rem, 3.8vw, 2.9rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.display-card-title {
+  font-family:
+    "Pretendard Variable",
+    Pretendard,
+    "Noto Sans KR",
+    "Apple SD Gothic Neo",
+    "Malgun Gothic",
+    var(--font-manrope),
+    sans-serif;
+  font-size: clamp(1.35rem, 2.7vw, 1.95rem);
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.metric-value {
+  font-size: clamp(1.7rem, 2.8vw, 2.35rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
 }
 
 .glass-panel {
@@ -304,6 +358,28 @@ a {
 
 .rise-in {
   animation: rise-in 420ms ease;
+}
+
+.scroll-row {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scroll-row::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .section-kicker {
+    padding: 0.4rem 0.72rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+  }
+
+  .hero-sheen::after {
+    height: 120px;
+    width: 120px;
+  }
 }
 
 @keyframes pulse {

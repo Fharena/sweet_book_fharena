@@ -1034,7 +1034,7 @@ export function CheckoutOrderClient() {
 
       {draft && isDemoDraft ? (
         <article className="soft-card mb-4 rounded-[28px] p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <p className="section-kicker">샘플 여행 초안</p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -1057,7 +1057,7 @@ export function CheckoutOrderClient() {
         </article>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <article className="space-y-4">
           <div className="editorial-panel rounded-[32px] p-5">
             <p className="section-kicker">책 요약</p>
@@ -1093,7 +1093,7 @@ export function CheckoutOrderClient() {
               </p>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <div className="metric-tile px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 페이지</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">{pageCount}</p>
@@ -1231,7 +1231,7 @@ export function CheckoutOrderClient() {
                   </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                   {[
                     ["전체 단계", planPreview.totalOperationCount, "cover + divider + content + publish"],
                     ["표지", planPreview.operationCounts.cover, "처음 한 번 적용"],
@@ -1252,7 +1252,7 @@ export function CheckoutOrderClient() {
                 </div>
 
                 {bookSpecPreview ? (
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                     <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
                       <p className="text-xs uppercase tracking-[0.2em] text-slate-500">최소 페이지</p>
                       <p className="mt-2 text-xl font-semibold text-slate-900">
@@ -1274,7 +1274,7 @@ export function CheckoutOrderClient() {
                   </div>
                 ) : null}
 
-                <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                <div className="grid gap-4 2xl:grid-cols-[0.9fr_1.1fr]">
                   <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-5 py-4">
                     <p className="text-sm font-semibold text-slate-900">챕터 기준 미리보기</p>
                     <div className="mt-3 space-y-3">
@@ -1344,7 +1344,7 @@ export function CheckoutOrderClient() {
               확인할 수 있도록 최종 요약을 묶어뒀습니다.
             </p>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
               {[
                 ["총 사진 수", photoCount, "현재 draft 전체 사진"],
                 ["챕터 수", chapterCount, "포토북 스프레드 기준"],
@@ -1360,7 +1360,7 @@ export function CheckoutOrderClient() {
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                     {label}
                   </p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
+                  <p className="metric-value mt-2 font-semibold text-slate-900">{value}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{note}</p>
                 </div>
               ))}
@@ -1472,7 +1472,7 @@ export function CheckoutOrderClient() {
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-[22px] border border-[var(--line)] bg-white/78 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">최근 이벤트</p>
                   <p className="mt-2 text-lg font-semibold text-slate-900">
@@ -1521,7 +1521,7 @@ export function CheckoutOrderClient() {
                           }
                           className="rounded-[22px] border border-[var(--line)] bg-white/86 px-4 py-4"
                         >
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                             <div>
                               <p className="text-sm font-semibold text-slate-900">
                                 {eventMeta.label}

@@ -134,7 +134,7 @@ export default function BookPreviewPage() {
             <p className="section-kicker">현재 선택된 패턴</p>
             <div className={`mt-4 rounded-[24px] px-4 py-4 ${selectedTheme.spotlightClassName}`}>
               <div className="flex items-center justify-between gap-3">
-                <p className="font-display text-[2rem] text-slate-900">
+                <p className="display-card-title text-slate-900">
                   {selectedTheme.name}
                 </p>
                 <span
@@ -186,7 +186,7 @@ export default function BookPreviewPage() {
       ) : null}
 
       <section className="hero-sheen rounded-[32px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(255,255,255,0.92),_rgba(255,244,236,0.96))] p-6 shadow-[0_18px_50px_rgba(82,55,29,0.08)] sm:p-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-2xl min-w-0 space-y-4">
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
@@ -196,14 +196,14 @@ export default function BookPreviewPage() {
                 Sweetbook 조립 반영
               </span>
             </div>
-            <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.8rem]">
+            <h2 className="display-title max-w-xl text-slate-900">
               앱에서 고른 무드가 실제 포토북 계획까지 이어집니다.
             </h2>
             <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
               선택한 패턴은 단순한 미리보기가 아니라 Sweetbook 조립 계획의 텍스트 톤과
               챕터 리듬에도 반영됩니다. 제출 데모에서는 이 흐름을 바로 설명할 수 있습니다.
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <div className="rounded-[24px] border border-[var(--line)] bg-white/85 px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500">사진</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
@@ -225,10 +225,10 @@ export default function BookPreviewPage() {
             </div>
           </div>
 
-          <div className="grid w-full gap-3 sm:min-w-[18rem]">
+          <div className="grid w-full gap-3 md:grid-cols-2 xl:min-w-[17rem] xl:grid-cols-1">
             <div className="rounded-[28px] border border-[var(--line)] bg-white/85 px-5 py-5">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 페이지</p>
-              <p className="mt-2 text-4xl font-semibold text-slate-900">{pageCount}</p>
+              <p className="metric-value mt-2 font-semibold text-slate-900">{pageCount}</p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 {isNormalizedPageCount
                   ? `${pageRuleSummary} 규칙이 반영된 전체 분량입니다.`
@@ -237,7 +237,7 @@ export default function BookPreviewPage() {
             </div>
             <div className="rounded-[28px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(15,118,110,0.12),_rgba(249,115,82,0.12))] px-5 py-5">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500">예상 금액</p>
-              <p className="mt-2 text-4xl font-semibold text-slate-900">
+              <p className="metric-value mt-2 font-semibold text-slate-900">
                 {estimatedPrice.toLocaleString("ko-KR")}원
               </p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -272,7 +272,7 @@ export default function BookPreviewPage() {
                 >
                   <div className={`rounded-[24px] p-4 ${theme.spotlightClassName}`}>
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-display text-[1.95rem] text-slate-900">
+                      <p className="display-card-title text-slate-900">
                         {theme.name}
                       </p>
                       <span
@@ -309,7 +309,7 @@ export default function BookPreviewPage() {
                 {selectedTheme.name}
               </span>
             </div>
-            <h2 className="mt-14 max-w-sm font-display text-4xl text-white sm:text-[3.25rem]">
+            <h2 className="mt-12 max-w-sm text-[clamp(2.1rem,4.6vw,3.1rem)] font-semibold tracking-[-0.04em] text-white">
               {draft ? draft.tripName : "밤의 기록"}
             </h2>
             <p className="mt-4 max-w-sm text-sm leading-6 text-white/80">
@@ -317,7 +317,7 @@ export default function BookPreviewPage() {
                 ? `사진 ${draft.stats.totalPhotos}장, 챕터 ${draft.chapters.length}개로 구성`
                 : "도시 산책, 사찰의 아침, 그리고 호수로 잠시 벗어난 하루."}
             </p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {[
                 ["커버", "1장"],
                 ["스프레드", `${chapters.length}개`],
@@ -400,7 +400,7 @@ export default function BookPreviewPage() {
                   {selectedTheme.spreadEyebrow} / {"photoIds" in group ? group.dayLabel : group.day}
                 </p>
                 <div className="mt-4 rounded-[28px] border border-[var(--line)] bg-[linear-gradient(145deg,_rgba(255,255,255,0.92),_rgba(247,240,231,0.82))] p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="max-w-2xl">
                       <div className="flex flex-wrap gap-2">
                         <span
@@ -412,7 +412,7 @@ export default function BookPreviewPage() {
                           {chapterDateLabel}
                         </span>
                       </div>
-                      <h3 className="mt-4 font-display text-[2.2rem] text-slate-900 sm:text-[2.7rem]">
+                      <h3 className="display-title mt-4 max-w-xl text-slate-900">
                         {chapterPlaceLabel}
                       </h3>
                       <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -420,7 +420,7 @@ export default function BookPreviewPage() {
                       </p>
                     </div>
 
-                    <div className="grid w-full gap-3 sm:min-w-[17rem]">
+                    <div className="grid w-full gap-3 xl:min-w-[16rem]">
                       <div
                         className={`rounded-[24px] border border-[var(--line)] p-4 ${selectedTheme.spotlightClassName}`}
                       >
@@ -482,7 +482,7 @@ export default function BookPreviewPage() {
 
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="font-display text-[2.2rem] text-slate-900 sm:text-[2.7rem]">
+                      <h3 className="display-title text-slate-900">
                         {group.title}
                       </h3>
                       <span

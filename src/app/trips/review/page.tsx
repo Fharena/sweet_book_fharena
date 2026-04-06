@@ -157,7 +157,7 @@ export default function TripReviewPage() {
 
         {activeDraft && isDemoDraft ? (
           <article className="soft-card rounded-[28px] p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <p className="section-kicker">샘플 여행 초안</p>
                 <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -192,7 +192,7 @@ export default function TripReviewPage() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
+            <div className="mt-5 grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
               {[
                 ["GPS 즉시 분류", classificationSummary.exif, "EXIF 좌표로 바로 묶인 사진"],
                 [
@@ -218,7 +218,7 @@ export default function TripReviewPage() {
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                     {label}
                   </p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
+                  <p className="metric-value mt-2 font-semibold text-slate-900">{value}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-600">{note}</p>
                 </div>
               ))}
@@ -228,7 +228,7 @@ export default function TripReviewPage() {
 
         {activeDraft ? (
           <section className="hero-sheen rounded-[32px] border border-[var(--line)] bg-[linear-gradient(135deg,_rgba(255,255,255,0.92),_rgba(255,244,236,0.96))] p-6 shadow-[0_18px_50px_rgba(82,55,29,0.08)] sm:p-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-2xl min-w-0 space-y-4">
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
@@ -238,7 +238,7 @@ export default function TripReviewPage() {
                     수동 보정 대기
                   </span>
                 </div>
-                <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.8rem]">
+                <h2 className="display-title max-w-xl text-slate-900">
                   사진이 이야기처럼 이어지도록 먼저 정리합니다.
                 </h2>
                 <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
@@ -246,12 +246,12 @@ export default function TripReviewPage() {
                 </p>
               </div>
 
-              <div className="grid w-full gap-3 sm:min-w-[18rem]">
+              <div className="grid w-full gap-3 md:grid-cols-2 xl:min-w-[17rem] xl:grid-cols-1">
                 <div className="rounded-[24px] border border-[var(--line)] bg-white/85 px-5 py-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                     사진
                   </p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-900">
+                  <p className="metric-value mt-2 font-semibold text-slate-900">
                     {activeDraft.stats.totalPhotos}
                   </p>
                 </div>
@@ -259,7 +259,7 @@ export default function TripReviewPage() {
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                     챕터
                   </p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-900">
+                  <p className="metric-value mt-2 font-semibold text-slate-900">
                     {activeDraft.chapters.length}
                   </p>
                 </div>
@@ -313,10 +313,10 @@ export default function TripReviewPage() {
 
         {activeDraft ? (
           <article className="soft-card rounded-[32px] p-5 sm:p-6">
-            <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 xl:flex-row xl:items-start xl:justify-between">
               <div className="space-y-3">
                 <p className="eyebrow text-[11px] font-semibold">수동 태깅</p>
-                <h2 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.5rem]">
+                <h2 className="display-title max-w-xl text-slate-900">
                   위치가 비는 사진만 빠르게 보정합니다.
                 </h2>
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
@@ -367,7 +367,7 @@ export default function TripReviewPage() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                    className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white"
                     onClick={handleApplyManualTag}
                   >
                     선택 사진에 태그 적용
@@ -450,14 +450,14 @@ export default function TripReviewPage() {
             key={"photoIds" in group ? group.id : group.title}
             className="soft-card rounded-[32px] p-5 transition hover:-translate-y-0.5 sm:p-6"
           >
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl space-y-3">
                 <p className="eyebrow text-[11px] font-semibold">
                   {"photoIds" in group ? group.dayLabel : group.day} /{" "}
                   {"photoIds" in group ? "업로드 기준" : group.time}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="font-display text-[2.2rem] text-slate-900 sm:text-[2.7rem]">
+                  <h2 className="display-card-title text-slate-900">
                     {group.title}
                   </h2>
                   <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
@@ -474,7 +474,7 @@ export default function TripReviewPage() {
                 </p>
               </div>
 
-              <div className="grid w-full gap-3 sm:min-w-[16rem]">
+              <div className="grid w-full gap-3 md:grid-cols-2 xl:min-w-[16rem] xl:grid-cols-1">
                 <div className="rounded-[24px] border border-[var(--line)] bg-white/80 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
                     사진 수

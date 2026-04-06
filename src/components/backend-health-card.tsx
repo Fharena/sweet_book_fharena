@@ -92,7 +92,7 @@ export function BackendHealthCard({
 
   return (
     <article className={`soft-card rounded-[28px] ${compact ? "p-4" : "p-5"}`}>
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="section-kicker">Backend / BFF</p>
           <p className="mt-3 text-sm font-semibold text-slate-900">{title}</p>

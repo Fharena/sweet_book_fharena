@@ -84,11 +84,11 @@ export function AppShell({
             </div>
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+          <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.02fr)_minmax(280px,0.88fr)]">
             <div className="min-w-0 space-y-5">
               <p className="eyebrow text-xs font-semibold">{eyebrow}</p>
               <div>
-                <h1 className="max-w-4xl font-display text-3xl tracking-[-0.05em] text-slate-900 sm:text-[3.1rem] lg:text-[3.7rem]">
+                <h1 className="display-hero max-w-4xl text-slate-900">
                   {title}
                 </h1>
                 <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
@@ -108,7 +108,7 @@ export function AppShell({
               </div>
             </div>
 
-            <div className="min-w-0 ink-panel rounded-[32px] px-5 py-5 text-white">
+            <div className="min-w-0 self-start ink-panel rounded-[32px] px-5 py-5 text-white xl:self-stretch">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold">이번 화면의 역할</p>
                 <span className="travel-badge rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/82">
@@ -140,7 +140,7 @@ export function AppShell({
             </div>
           </div>
 
-          <nav className="mt-6 flex flex-wrap gap-2">
+          <nav className="mt-6 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
             {navSteps.map((step, index) => {
               const isActive = pathname === step.href;
 
@@ -149,9 +149,9 @@ export function AppShell({
                   key={step.href}
                   href={step.href}
                   aria-current={isActive ? "page" : undefined}
-                  className={`group rounded-full border px-4 py-2.5 text-sm font-medium transition hover:-translate-y-0.5 ${
+                  className={`group flex min-w-0 items-center justify-center rounded-full border px-3 py-2.5 text-sm font-medium transition hover:-translate-y-0.5 sm:justify-start ${
                     isActive
-                      ? "border-[rgba(15,118,110,0.18)] bg-[linear-gradient(135deg,_rgba(15,118,110,0.14),_rgba(255,255,255,0.94))] text-[var(--accent-deep)] shadow-[0_12px_24px_rgba(10,78,85,0.12)]"
+                      ? "border-[rgba(15,118,110,0.2)] bg-[linear-gradient(135deg,_rgba(15,118,110,0.16),_rgba(255,255,255,0.98))] text-[var(--accent-deep)] shadow-[0_12px_24px_rgba(10,78,85,0.12)]"
                       : "border-[var(--line)] bg-white/75 text-slate-700 hover:border-slate-400 hover:bg-white"
                   }`}
                 >
@@ -164,14 +164,14 @@ export function AppShell({
                   >
                     {index + 1}
                   </span>
-                  {step.label}
+                  <span className="truncate">{step.label}</span>
                 </Link>
               );
             })}
           </nav>
         </header>
 
-        <main className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,0.95fr)]">
+        <main className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.95fr)]">
           <section className="min-w-0 glass-panel rounded-[32px] p-6 sm:p-8">{children}</section>
           <aside className="min-w-0 glass-panel rounded-[32px] p-6 sm:p-8">{aside}</aside>
         </main>

@@ -47,7 +47,7 @@ export function DemoTripLauncher({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-2xl min-w-0 space-y-3">
           <p className="section-kicker">빠른 데모 시작</p>
-          <h3 className="max-w-xl font-display text-3xl text-slate-900 sm:text-[2.5rem]">
+          <h3 className="display-title max-w-xl text-slate-900">
             업로드 없이 샘플 여행 초안을 바로 불러올 수 있습니다.
           </h3>
           <p className="text-sm leading-6 text-slate-600">
@@ -55,7 +55,7 @@ export function DemoTripLauncher({
           </p>
         </div>
 
-        <div className="grid w-full gap-3 sm:min-w-[18rem] sm:grid-cols-2 lg:max-w-sm lg:grid-cols-1">
+        <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-sm lg:grid-cols-1">
           <button
             type="button"
             className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
@@ -75,7 +75,7 @@ export function DemoTripLauncher({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="metric-tile px-4 py-4">
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">여행</p>
           <p className="mt-2 text-sm font-semibold text-slate-900">

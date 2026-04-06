@@ -14,7 +14,7 @@ export default function WebhookOpsPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="eyebrow text-[11px] font-semibold">운영 기준</p>
-                <h3 className="mt-3 font-display text-[2rem] text-slate-900">
+                <h3 className="display-card-title mt-3 text-slate-900">
                   등록 즉시 확인하고, 이후엔 안전하게 숨기는 흐름
                 </h3>
               </div>
@@ -23,7 +23,7 @@ export default function WebhookOpsPage() {
               </span>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {[
                 ["시크릿", "첫 등록 응답에만 전체 노출"],
                 ["검증", "timestamp.payload HMAC-SHA256"],

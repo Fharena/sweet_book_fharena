@@ -703,7 +703,7 @@ export function WebhookOpsClient() {
           <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              className="rounded-[24px] bg-slate-950 px-5 py-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              className="button-primary rounded-[24px] px-5 py-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none"
               onClick={() => void handleSave()}
               disabled={isSaving}
             >
@@ -771,7 +771,7 @@ export function WebhookOpsClient() {
               type="button"
               className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
                 duplicateOnly
-                  ? "border-transparent bg-slate-950 text-white"
+                  ? "border-transparent bg-[var(--accent)] text-white shadow-[0_12px_24px_rgba(10,78,85,0.18)]"
                   : "border-[var(--line)] bg-white/80 text-slate-700 hover:border-slate-400"
               }`}
               onClick={() => setDuplicateOnly((current) => !current)}
@@ -824,7 +824,7 @@ export function WebhookOpsClient() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
                 {item.label}
               </p>
-              <p className="mt-3 font-display text-[2rem] text-slate-900">
+              <p className="display-card-title mt-3 text-slate-900">
                 {item.value}
               </p>
               <p className="mt-3 text-sm leading-6 text-slate-600">{item.note}</p>

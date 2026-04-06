@@ -62,7 +62,7 @@ export default function Home() {
         <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-5">
             <span className="section-kicker">서비스 콘셉트</span>
-            <p className="max-w-2xl text-lg leading-8 text-slate-700 sm:text-[1.2rem]">
+            <p className="max-w-2xl text-base leading-8 text-slate-700 sm:text-[1.1rem]">
               여행 사진을 날짜와 장소 기준으로 자동 정리하고, GPS가 없는 사진은 수동
               태깅으로 보완한 뒤, 서점 수준의 미리보기와 주문 흐름으로 이어주는
               여행 포토북 서비스입니다.
@@ -172,7 +172,7 @@ export default function Home() {
           <div className="grid gap-4 md:grid-cols-3">
             {previewThemes.map((theme) => (
               <article key={theme.name} className="soft-card rounded-[28px] p-5">
-                <p className="font-display text-[1.95rem] text-slate-900">
+                <p className="display-card-title text-slate-900">
                   {theme.name}
                 </p>
                 <p className="mt-3 text-sm leading-6 text-slate-600">{theme.note}</p>
