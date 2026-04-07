@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { flushSync } from "react-dom";
 import {
   useEffect,
   useMemo,
@@ -133,14 +134,6 @@ const emptyOrderDraft: CheckoutOrderDraft = {
   address1: "",
   address2: "",
   memo: "",
-};
-
-const initialStepRefs: Record<StudioStepId, HTMLElement | null> = {
-  trip: null,
-  upload: null,
-  review: null,
-  preview: null,
-  publish: null,
 };
 
 function formatBytes(bytes: number) {
@@ -518,8 +511,6 @@ export function StudioClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { draft } = useTripDraft();
-  const topRef = useRef<HTMLDivElement | null>(null);
-  const stepRefs = useRef<Record<StudioStepId, HTMLElement | null>>(initialStepRefs);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedUploads, setSelectedUploads] = useState<SelectedUploadFile[]>([]);
   const [lastSelectedAt, setLastSelectedAt] = useState<string | null>(null);
@@ -646,16 +637,15 @@ export function StudioClient() {
   const canOpenPreview = Boolean(draft?.chapters.length);
   const canOpenPublish = Boolean(draft?.photos.length);
 
-  function scrollToStep(step: StudioStepId) {
-    const section = stepRefs.current[step] ?? topRef.current;
-    section?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   function moveToStep(step: StudioStepId) {
-    setActiveStep(step);
+    flushSync(() => {
+      setActiveStep(step);
+    });
+
     if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => {
-        scrollToStep(step);
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
       });
     }
   }
@@ -998,7 +988,7 @@ export function StudioClient() {
 
   return (
     <div className="relative px-4 py-6 sm:px-6 lg:px-8">
-      <div ref={topRef} className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <section
           className={`studio-hero rounded-[32px] border border-white/70 px-5 py-5 sm:px-8 ${activeStep === "trip" ? "sm:py-8" : "sm:py-6"}`}
         >
@@ -1139,12 +1129,7 @@ export function StudioClient() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.42fr)_minmax(290px,0.78fr)]">
           <main className="space-y-6">
-            <section
-              ref={(node) => {
-                stepRefs.current.trip = node;
-              }}
-              className={getStepPanelClass("trip")}
-            >
+            <section className={getStepPanelClass("trip")}>
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1211,12 +1196,7 @@ export function StudioClient() {
               </div>
             </section>
 
-            <section
-              ref={(node) => {
-                stepRefs.current.upload = node;
-              }}
-              className={getStepPanelClass("upload")}
-            >
+            <section className={getStepPanelClass("upload")}>
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1420,12 +1400,7 @@ export function StudioClient() {
               </div>
             </section>
 
-            <section
-              ref={(node) => {
-                stepRefs.current.review = node;
-              }}
-              className={getStepPanelClass("review")}
-            >
+            <section className={getStepPanelClass("review")}>
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1606,12 +1581,7 @@ export function StudioClient() {
                 </div>
               )}
             </section>
-            <section
-              ref={(node) => {
-                stepRefs.current.preview = node;
-              }}
-              className={getStepPanelClass("preview")}
-            >
+            <section className={getStepPanelClass("preview")}>
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -1758,12 +1728,7 @@ export function StudioClient() {
               )}
             </section>
 
-            <section
-              ref={(node) => {
-                stepRefs.current.publish = node;
-              }}
-              className={getStepPanelClass("publish")}
-            >
+            <section className={getStepPanelClass("publish")}>
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
@@ -2031,7 +1996,7 @@ export function StudioClient() {
           </aside>
         </div>
 
-        <div className="mobile-step-dock rounded-[26px] p-3 lg:hidden">
+        <div className="mobile-step-dock rounded-[26px] p-3 xl:mx-auto xl:w-full xl:max-w-[52rem]">
           <div className="flex items-center gap-3">
             <button
               type="button"

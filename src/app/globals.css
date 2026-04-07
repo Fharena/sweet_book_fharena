@@ -472,17 +472,15 @@ a {
   backdrop-filter: blur(18px);
 }
 
-@media (min-width: 1024px) {
-  .wizard-stage {
-    display: block;
-  }
-
-  .wizard-rail {
-    top: 1rem;
-  }
-}
-
 @media (max-width: 640px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  body::after {
+    display: none;
+  }
+
   .section-kicker {
     padding: 0.4rem 0.72rem;
     font-size: 0.66rem;
@@ -501,6 +499,12 @@ a {
   .studio-card,
   .studio-hero {
     box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+  }
+
+  .studio-card,
+  .wizard-rail,
+  .mobile-step-dock {
+    backdrop-filter: none;
   }
 
   .button-primary,
