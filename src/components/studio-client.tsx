@@ -1098,7 +1098,7 @@ export function StudioClient() {
           </div>
         </section>
 
-        <nav className="wizard-rail rounded-[24px] p-2 lg:hidden">
+        <nav className="wizard-rail rounded-[24px] p-2">
           <div className="scroll-row flex gap-2 overflow-x-auto">
             {studioSteps.map((step) => {
               const isCurrent = step.id === activeStep;

@@ -56,7 +56,7 @@ body {
     radial-gradient(circle at 86% 14%, rgba(230, 122, 86, 0.12), transparent 26%),
     radial-gradient(circle at 82% 72%, rgba(15, 118, 110, 0.1), transparent 30%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.46), transparent 40%);
-  background-attachment: fixed;
+  background-attachment: scroll;
 }
 
 body::before {
@@ -493,7 +493,7 @@ a {
   }
 
   body::before {
-    opacity: 0.16;
+    opacity: 0.12;
   }
 
   .studio-card,
@@ -502,8 +502,11 @@ a {
   }
 
   .studio-card,
+  .studio-hero,
   .wizard-rail,
-  .mobile-step-dock {
+  .mobile-step-dock,
+  .glass-panel,
+  .travel-badge {
     backdrop-filter: none;
   }
 
