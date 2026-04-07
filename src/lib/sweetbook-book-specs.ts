@@ -15,6 +15,8 @@ export type SweetbookBookSpec = {
   sandboxPricePerIncrement: number | null;
 };
 
+export type SweetbookEnvironment = "sandbox" | "live";
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -100,6 +102,7 @@ export function normalizePageCountForBookSpec(
 export function estimateDisplayPriceForBookSpec(
   pageCount: number,
   bookSpec: SweetbookBookSpec | null,
+  environment: SweetbookEnvironment = "sandbox",
 ) {
   const fallbackPrice = Math.round(16800 + pageCount * 330);
 
@@ -109,16 +112,20 @@ export function estimateDisplayPriceForBookSpec(
 
   const minimum = bookSpec.pageMin || bookSpec.pageDefault || 24;
   const increment = bookSpec.pageIncrement || 2;
+  const basePriceCandidates =
+    environment === "live"
+      ? [bookSpec.priceBase, bookSpec.sandboxPriceBase]
+      : [bookSpec.sandboxPriceBase, bookSpec.priceBase];
+  const incrementPriceCandidates =
+    environment === "live"
+      ? [bookSpec.pricePerIncrement, bookSpec.sandboxPricePerIncrement]
+      : [bookSpec.sandboxPricePerIncrement, bookSpec.pricePerIncrement];
   const basePrice =
-    [bookSpec.priceBase, bookSpec.sandboxPriceBase].find(
-      (value) => typeof value === "number" && value >= 1000,
-    ) ?? null;
+    basePriceCandidates.find((value) => typeof value === "number" && value >= 0) ?? null;
   const pricePerIncrement =
-    [bookSpec.pricePerIncrement, bookSpec.sandboxPricePerIncrement].find(
-      (value) => typeof value === "number" && value >= 100,
-    ) ?? null;
+    incrementPriceCandidates.find((value) => typeof value === "number" && value >= 0) ?? 0;
 
-  if (basePrice === null || pricePerIncrement === null) {
+  if (basePrice === null) {
     return fallbackPrice;
   }
 

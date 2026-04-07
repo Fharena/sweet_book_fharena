@@ -1071,9 +1071,16 @@ export function StudioClient({
     pageRuleSummary,
     pageCount,
     estimatedPrice,
+    environment: pricingEnvironment,
     isLoading: isLoadingProductMeta,
     error: productMetaError,
   } = useSweetbookProductMeta(draft, requestedPageCount);
+  const normalizedOrderQuantity = Number.isInteger(orderDraft.quantity)
+    ? Math.min(100, Math.max(1, orderDraft.quantity))
+    : 1;
+  const shippingFee = 3000;
+  const estimatedProductionPrice = estimatedPrice * normalizedOrderQuantity;
+  const estimatedTotalPrice = estimatedProductionPrice + shippingFee;
   const canOpenReview = Boolean(draft);
   const canOpenPreview = Boolean(draft?.chapters.length);
   const canOpenPublish = Boolean(draft?.photos.length);
@@ -3021,7 +3028,12 @@ export function StudioClient({
                           {productDimension} · {pageRuleSummary}
                         </p>
                         <p className="mt-4 text-sm font-medium text-slate-700">
-                          예상 금액 {estimatedPrice.toLocaleString("ko-KR")}원
+                          예상 제작비 {estimatedProductionPrice.toLocaleString("ko-KR")}원
+                        </p>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">
+                          {pricingEnvironment === "sandbox"
+                            ? "현재 sandbox 상품 가격 기준으로 계산한 예상치입니다."
+                            : "현재 상품 규격 가격 기준으로 계산한 예상치입니다."}
                         </p>
                         {productMetaError ? (
                           <p className="mt-3 text-sm text-amber-700">{productMetaError}</p>
@@ -3121,21 +3133,43 @@ export function StudioClient({
                           </span>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={handleComposeBook}
-                          disabled={!draft || isComposing}
-                        >
-                          {isComposing ? "테스트 책 생성 중..." : "테스트 책 생성"}
-                        </button>
-                        <Link
-                          href="/ops/webhooks"
-                          className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
-                        >
-                          웹훅 운영 보기
-                        </Link>
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            className="button-primary inline-flex h-[3.25rem] items-center justify-center rounded-[18px] px-5 py-3 text-sm font-semibold leading-none text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={handleComposeBook}
+                            disabled={!draft || isComposing}
+                          >
+                            {isComposing ? "테스트 책 생성 중..." : "테스트 책 생성"}
+                          </button>
+                          <Link
+                            href="/ops/webhooks"
+                            className="button-secondary inline-flex h-[3.25rem] items-center justify-center rounded-[18px] px-5 py-3 text-sm font-semibold leading-none text-slate-900"
+                          >
+                            웹훅 운영 보기
+                          </Link>
+                        </div>
+                        {isComposing ? (
+                          <div className="flex min-h-[3.25rem] flex-1 items-center gap-3 rounded-[18px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                            <span className="inline-flex h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-emerald-600 border-r-transparent" />
+                            <div>
+                              <p className="font-semibold">테스트 책 생성 중</p>
+                              <p className="text-emerald-800/90">
+                                Sweetbook에서 책 생성, 사진 업로드, 조립, 최종화를 진행하고 있습니다.
+                              </p>
+                            </div>
+                          </div>
+                        ) : composeResult ? (
+                          <div className="flex min-h-[3.25rem] flex-1 items-center rounded-[18px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                            <div>
+                              <p className="font-semibold">테스트 책 생성 완료</p>
+                              <p className="text-emerald-800/90">
+                                bookUid <span className="font-semibold">{composeResult.bookUid}</span> 준비 완료
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -3224,7 +3258,7 @@ export function StudioClient({
                   <div className="space-y-4">
                     <div className="flex items-center justify-between text-slate-600">
                       <span>포토북 제작 비용</span>
-                      <span>{estimatedPrice.toLocaleString("ko-KR")}원</span>
+                      <span>{estimatedProductionPrice.toLocaleString("ko-KR")}원</span>
                     </div>
                     <div className="flex items-center justify-between text-slate-600">
                       <span>배송비</span>
@@ -3234,11 +3268,11 @@ export function StudioClient({
                       <div>
                         <span className="text-sm text-slate-500">최종 결제 금액</span>
                         <h4 className="mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-                          {(estimatedPrice + 3000).toLocaleString("ko-KR")}원
+                          {estimatedTotalPrice.toLocaleString("ko-KR")}원
                         </h4>
                       </div>
                       <span className="text-xs font-medium text-[var(--accent-secondary)]">
-                        배송비 포함
+                        {pricingEnvironment === "sandbox" ? "sandbox 기준" : "배송비 포함"}
                       </span>
                     </div>
                   </div>
@@ -3251,20 +3285,16 @@ export function StudioClient({
                   </span>
                 </label>
 
-                {composeResult ? (
-                  <div className="rounded-[20px] bg-[rgba(15,118,110,0.06)] px-5 py-4 text-sm leading-6 text-slate-700">
-                    bookUid {composeResult.bookUid} · {composeResult.operationCount ?? 0}개 조립 단계와{" "}
-                    {composeResult.contentCount ?? 0}개 본문 처리가 완료됐습니다.
-                  </div>
-                ) : null}
-
                 {orderResult ? (
-                  <div className="rounded-[20px] bg-[rgba(160,62,64,0.08)] px-5 py-4 text-sm leading-6 text-slate-700">
-                    orderUid {orderResult.orderUid ?? "확인 중"} · 상태{" "}
-                    {orderResult.orderStatusDisplay ?? "확인 중"} · 금액{" "}
-                    {orderResult.totalAmount
-                      ? `${orderResult.totalAmount.toLocaleString("ko-KR")}원`
-                      : "확인 중"}
+                  <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm leading-6 text-emerald-900">
+                    <p className="font-semibold">주문이 정상적으로 접수되었습니다.</p>
+                    <p className="mt-1 text-emerald-800/90">
+                      orderUid {orderResult.orderUid ?? "확인 중"} · 상태{" "}
+                      {orderResult.orderStatusDisplay ?? "확인 중"} · 실제 주문 금액{" "}
+                      {orderResult.totalAmount
+                        ? `${orderResult.totalAmount.toLocaleString("ko-KR")}원`
+                        : "확인 중"}
+                    </p>
                   </div>
                 ) : null}
 

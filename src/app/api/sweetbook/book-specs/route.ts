@@ -5,7 +5,10 @@ import { sweetbookClient } from "@/lib/server/sweetbook/client";
 export async function GET() {
   try {
     const data = await sweetbookClient.listBookSpecs();
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...(typeof data === "object" && data !== null ? data : { data }),
+      env: process.env.SWEETBOOK_ENV === "live" ? "live" : "sandbox",
+    });
   } catch (error) {
     return NextResponse.json(
       {

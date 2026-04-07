@@ -11,6 +11,7 @@ import {
   formatBookSpecLabel,
   formatPageRuleSummary,
   normalizePageCountForBookSpec,
+  type SweetbookEnvironment,
   type SweetbookBookSpec,
 } from "@/lib/sweetbook-book-specs";
 import type { TripDraft } from "@/lib/trip-draft";
@@ -19,6 +20,7 @@ import type { SweetbookBookPlan } from "@/lib/trip-domain";
 type ProductMetaState = {
   bookSpecs: SweetbookBookSpec[];
   plan: SweetbookBookPlan | null;
+  environment: SweetbookEnvironment;
   isLoading: boolean;
   error: string | null;
 };
@@ -30,6 +32,7 @@ export function useSweetbookProductMeta(
   const [state, setState] = useState<ProductMetaState>({
     bookSpecs: [],
     plan: null,
+    environment: "sandbox",
     isLoading: Boolean(draft),
     error: null,
   });
@@ -66,6 +69,11 @@ export function useSweetbookProductMeta(
         }
 
         const nextBookSpecs = extractSweetbookBookSpecs(bookSpecsPayload);
+        const nextEnvironment =
+          typeof (bookSpecsPayload as { env?: unknown }).env === "string" &&
+          (bookSpecsPayload as { env?: unknown }).env === "live"
+            ? "live"
+            : "sandbox";
         let nextPlan: SweetbookBookPlan | null = null;
 
         if (planResponse) {
@@ -84,6 +92,7 @@ export function useSweetbookProductMeta(
           setState({
             bookSpecs: nextBookSpecs,
             plan: nextPlan,
+            environment: nextEnvironment,
             isLoading: false,
             error: null,
           });
@@ -115,7 +124,11 @@ export function useSweetbookProductMeta(
     [resolvedBookSpecUid, state.bookSpecs],
   );
   const pageCount = normalizePageCountForBookSpec(requestedPageCount, resolvedBookSpec);
-  const estimatedPrice = estimateDisplayPriceForBookSpec(pageCount, resolvedBookSpec);
+  const estimatedPrice = estimateDisplayPriceForBookSpec(
+    pageCount,
+    resolvedBookSpec,
+    state.environment,
+  );
   const productLabel = formatBookSpecLabel(resolvedBookSpec, travelPhotobookPreset.label);
   const pageRuleSummary = formatPageRuleSummary(resolvedBookSpec);
   const productDimension = formatBookSpecDimension(resolvedBookSpec);
@@ -134,6 +147,7 @@ export function useSweetbookProductMeta(
     coverSummary,
     pageCount,
     estimatedPrice,
+    environment: state.environment,
     isNormalizedPageCount: pageCount !== requestedPageCount,
   };
 }

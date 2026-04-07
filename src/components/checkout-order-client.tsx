@@ -514,7 +514,6 @@ export function CheckoutOrderClient() {
     isLoading: isLoadingProductMeta,
     isNormalizedPageCount,
   } = useSweetbookProductMeta(draft, requestedPageCount);
-  const estimatedPrice = formatCurrency(estimatedPriceValue);
   const resolvedLocationCount = draft?.stats.withResolvedLocation ?? 0;
   const gpsPhotoCount = draft?.stats.withGpsCoordinates ?? 0;
   const manualTaggingCount = draft?.stats.manualTaggingRequired ?? 0;
@@ -539,6 +538,12 @@ export function CheckoutOrderClient() {
           bookUid: composeResult?.bookUid ?? "",
         };
   });
+  const normalizedOrderQuantity = Number.isInteger(form.quantity)
+    ? Math.min(100, Math.max(1, form.quantity))
+    : 1;
+  const estimatedProductionPriceValue =
+    typeof estimatedPriceValue === "number" ? estimatedPriceValue * normalizedOrderQuantity : null;
+  const estimatedPrice = formatCurrency(estimatedProductionPriceValue);
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof CheckoutOrderDraft, string>>
   >({});
