@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
+import { AutoDarkGuard } from "@/components/auto-dark-guard";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -30,6 +31,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#fbf9f4" />
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <AutoDarkGuard />
         {children}
       </body>
     </html>
