@@ -78,6 +78,7 @@ type SelectedUploadFile = {
   key: string;
   file: File;
   displayName: string;
+  previewUrl: string;
 };
 
 const studioSteps: Array<{
@@ -227,6 +228,7 @@ function normalizeSelectedFile(file: File, index: number) {
     key: `${index}-${getFileKey(file) || displayName}`,
     file,
     displayName,
+    previewUrl: URL.createObjectURL(file),
   } satisfies SelectedUploadFile;
 }
 
@@ -589,6 +591,12 @@ export function StudioClient() {
   );
 
   useEffect(() => {
+    return () => {
+      selectedUploads.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, [selectedUploads]);
+
+  useEffect(() => {
     setComposeResult(loadCheckoutComposeResult());
     setOrderResult(loadCheckoutOrderResult());
     setOrderDraft(loadCheckoutOrderDraft() ?? emptyOrderDraft);
@@ -736,6 +744,12 @@ export function StudioClient() {
     setLastSelectedAt(selectedAt);
     setUploadError(null);
     moveToStep("upload");
+  }
+
+  function handleClearSelectedUploads() {
+    setSelectedUploads([]);
+    setLastSelectedAt(null);
+    setUploadError(null);
   }
 
   async function handleUpload() {
@@ -975,6 +989,11 @@ export function StudioClient() {
     }
   }
 
+  const tripVisualPhoto = draft?.photos[0];
+  const tripVisualSrc = tripVisualPhoto ? getPhotoSource(tripVisualPhoto) : null;
+  const visibleUploadCards = selectedUploads.slice(0, 5);
+  const hiddenUploadCount = Math.max(selectedUploads.length - visibleUploadCards.length, 0);
+
   const currentStepIndex =
     studioSteps.find((step) => step.id === activeStep)?.index ?? studioSteps[0].index;
   const currentStepPosition = studioSteps.findIndex((step) => step.id === activeStep);
@@ -1194,122 +1213,150 @@ export function StudioClient() {
         <div className="mx-auto grid w-full max-w-5xl gap-6 2xl:grid-cols-[minmax(0,1.42fr)_minmax(290px,0.78fr)]">
           <main className="space-y-6">
             <section className={getStepPanelClass("trip")}>
-              <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                    1. 여행 설정
+              <div className="space-y-10">
+                <div className="space-y-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--accent)]">
+                    Step 01 / 05
                   </p>
-                  <h2 className="mt-3 text-[clamp(1.8rem,3vw,2.6rem)] font-semibold tracking-[-0.05em] text-slate-950">
-                    포토북 제목과 여행 기간을 먼저 맞춥니다.
+                  <h2 className="max-w-3xl text-[clamp(2rem,5vw,3.6rem)] font-extrabold leading-[1.12] tracking-[-0.06em] text-slate-950">
+                    기록의 시작,
+                    <br />
+                    여행의 정보를 입력해주세요
                   </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-                    여행 정보는 챕터 제목, 표지 부제, 최종 Sweetbook 제목에 그대로 이어집니다. 처음부터 너무 많은 선택지를 주지 않고, 꼭 필요한 값만 먼저 정리합니다.
+                  <p className="max-w-2xl text-lg leading-8 text-slate-600">
+                    당신의 소중한 순간들을 정갈하게 담아낼 첫 페이지를 작성합니다.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                  onClick={() => moveToStep("upload")}
-                >
-                  여행 정보 확인 후 업로드로 이동
-                </button>
-              </div>
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)]">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="grid gap-2 sm:col-span-2">
-                    <span className="text-sm font-semibold text-slate-900">여행 이름</span>
-                    <input
-                      value={tripName}
-                      onChange={(event) => setTripName(event.target.value)}
-                      className="rounded-[22px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
-                      placeholder="예: 도쿄 나이트 앤 라이트"
-                    />
-                  </label>
-                  <label className="grid gap-2">
-                    <span className="text-sm font-semibold text-slate-900">출발일</span>
-                    <input
-                      type="date"
-                      value={travelStart}
-                      onChange={(event) => setTravelStart(event.target.value)}
-                      className="rounded-[22px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
-                    />
-                  </label>
-                  <label className="grid gap-2">
-                    <span className="text-sm font-semibold text-slate-900">종료일</span>
-                    <input
-                      type="date"
-                      value={travelEnd}
-                      onChange={(event) => setTravelEnd(event.target.value)}
-                      className="rounded-[22px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
-                    />
-                  </label>
-                </div>
+                <div className="grid gap-8 xl:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)] xl:items-start">
+                  <form className="space-y-8">
+                    <label className="space-y-2">
+                      <span className="block px-1 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+                        여행 제목
+                      </span>
+                      <input
+                        value={tripName}
+                        onChange={(event) => setTripName(event.target.value)}
+                        className="w-full rounded-[24px] border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-lg text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.2)]"
+                        placeholder="예: 파리에서의 열흘간의 기록"
+                      />
+                    </label>
 
-                <div className="rounded-[28px] border border-[rgba(15,118,110,0.18)] bg-[linear-gradient(180deg,_rgba(15,118,110,0.08),_rgba(255,255,255,0.94))] px-5 py-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                    갤럭시 팁
-                  </p>
-                  <p className="mt-3 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                    카메라 위치 태그를 켜두면 자동 정리가 가장 정확합니다.
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
-                    위치 정보가 없는 사진도 괜찮습니다. 업로드 후 사진 몇 장만 선택해서 장소 태그를 넣으면 같은 시간대 컷까지 다시 묶습니다.
-                  </p>
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="block px-1 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+                          시작일
+                        </span>
+                        <div className="relative">
+                          <input
+                            type="date"
+                            value={travelStart}
+                            onChange={(event) => setTravelStart(event.target.value)}
+                            className="w-full rounded-[24px] border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-base text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.2)]"
+                          />
+                          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            date
+                          </span>
+                        </div>
+                      </label>
+
+                      <label className="space-y-2">
+                        <span className="block px-1 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
+                          종료일
+                        </span>
+                        <div className="relative">
+                          <input
+                            type="date"
+                            value={travelEnd}
+                            onChange={(event) => setTravelEnd(event.target.value)}
+                            className="w-full rounded-[24px] border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-base text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.2)]"
+                          />
+                          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            date
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="button-primary inline-flex items-center gap-2 rounded-[18px] px-6 py-3.5 text-sm font-semibold text-white"
+                      onClick={() => moveToStep("upload")}
+                    >
+                      사진 업로드하러 가기
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  </form>
+
+                  <div className="space-y-5">
+                    <div className="group relative overflow-hidden rounded-[28px] border border-[rgba(191,201,196,0.16)] bg-[var(--surface-container-low,rgba(245,243,238,0.96))] p-1">
+                      <div className="relative aspect-[16/11] overflow-hidden rounded-[22px]">
+                        {tripVisualSrc ? (
+                          <Image
+                            src={tripVisualSrc}
+                            alt={tripVisualPhoto?.originalName ?? "trip visual"}
+                            fill
+                            unoptimized
+                            className="object-cover transition-transform duration-700 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-[linear-gradient(145deg,_rgba(15,118,110,0.22),_rgba(255,255,255,0.9))]" />
+                        )}
+                        <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(0,52,43,0.48))]" />
+                        <div className="absolute inset-x-0 bottom-0 p-6 text-white">
+                          <span className="text-xs font-bold uppercase tracking-[0.22em] text-white/78">
+                            Journal Tip
+                          </span>
+                          <p className="mt-2 text-sm font-medium leading-6 text-white/88">
+                            정확한 날짜는 나중에 타임라인을 자동 생성하는 데 도움을 줍니다.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-[rgba(15,118,110,0.18)] bg-[linear-gradient(180deg,_rgba(15,118,110,0.08),_rgba(255,255,255,0.94))] px-5 py-5">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+                        Galaxy Tip
+                      </p>
+                      <p className="mt-3 text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                        위치 태그가 포함된 사진은 더 정확한 챕터를 만듭니다.
+                      </p>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        GPS가 없는 사진도 괜찮습니다. 업로드 후 몇 장만 직접 태그해주면 같은 시간대와 장소 흐름을 다시 묶어줍니다.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
 
             <section className={getStepPanelClass("upload")}>
-              <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                    2. 사진 업로드
-                  </p>
-                  <h2 className="mt-3 text-[clamp(1.8rem,3vw,2.6rem)] font-semibold tracking-[-0.05em] text-slate-950">
-                    사진을 고르면 바로 목록으로 반영되고 다음 단계로 이어집니다.
-                  </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-                    모바일 브라우저마다 다르게 보이는 기본 파일 입력 UI는 숨기고, 앱이 제어하는 선택 버튼과 상태 카드만 남겼습니다.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                    onClick={handleLoadDemo}
-                  >
-                    샘플 초안으로 바로 보기
-                  </button>
-                  <button
-                    type="button"
-                    className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={handleUpload}
-                    disabled={isUploading || selectedUploads.length === 0}
-                  >
-                    {isUploading ? "사진 정리 중..." : "사진 읽고 다음 단계로"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)]">
+              <div className="space-y-8">
                 <div className="space-y-4">
-                  <label
-                    htmlFor="studio-photo-picker"
-                    className="flex min-h-[14rem] w-full cursor-pointer flex-col items-center justify-center rounded-[30px] border border-dashed border-[rgba(15,118,110,0.26)] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(239,247,245,0.96))] px-6 py-8 text-center transition hover:border-[var(--accent)] hover:bg-white"
-                  >
-                    <span className="rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                      사진 선택
-                    </span>
-                    <h3 className="mt-5 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                      갤러리에서 여행 사진을 여러 장 고르세요.
-                    </h3>
-                    <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
-                      선택 직후 아래에 파일명과 장수가 바로 보이고, 업로드하면 날짜별·장소별로 자동 정리됩니다.
-                    </p>
-                    <p className="mt-4 text-xs font-medium text-slate-500">
-                      갤럭시 사진은 위치 태그가 켜져 있으면 자동 정리 정확도가 더 높습니다.
-                    </p>
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--accent)]">
+                    Step 02 / 05
+                  </p>
+                  <h2 className="max-w-3xl text-[clamp(2rem,5vw,3.4rem)] font-extrabold leading-[1.12] tracking-[-0.06em] text-slate-950">
+                    여행의 순간들을
+                    <br />
+                    업로드하세요
+                  </h2>
+                  <p className="max-w-2xl text-lg leading-8 text-slate-600">
+                    기록하고 싶은 사진들을 선택해주세요. Triplogue가 시간과 장소별로 자동 정리해 드립니다.
+                  </p>
+                </div>
+
+                <div className="space-y-6">
+                  <label htmlFor="studio-photo-picker" className="relative block cursor-pointer group">
+                    <div className="flex aspect-[16/9] min-h-[14rem] w-full flex-col items-center justify-center rounded-[24px] border-2 border-dashed border-[rgba(191,201,196,0.32)] bg-[rgba(245,243,238,0.88)] px-6 text-center transition-all hover:border-[rgba(0,52,43,0.38)] group-active:scale-[0.99]">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-white">
+                        <span className="text-3xl">+</span>
+                      </div>
+                      <span className="font-bold text-[var(--accent)]">사진 선택하기</span>
+                      <span className="mt-1 text-xs text-slate-500">
+                        JPG, PNG, HEIC, HEIF, WebP
+                      </span>
+                    </div>
                   </label>
                   <input
                     ref={fileInputRef}
@@ -1321,71 +1368,78 @@ export function StudioClient() {
                     onChange={handleFileInputChange}
                   />
 
-                  <div className="flex flex-wrap gap-3">
-                    <label
-                      htmlFor="studio-photo-picker"
-                      className="button-secondary inline-flex cursor-pointer rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                    >
-                      사진 다시 고르기
-                    </label>
-                    {selectedUploads.length > 0 ? (
-                      <span className="rounded-full bg-[var(--accent-soft)] px-4 py-3 text-sm font-semibold text-[var(--accent)]">
-                        {selectedUploads.length}장 선택됨
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {selectedUploads.length > 0 ? (
-                    <div className="space-y-4">
-                      <div className="rounded-[24px] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-4 py-3 text-sm text-slate-700">
-                        사진이 선택되면 아래 목록이 바로 보여야 정상입니다. 이 목록이 보이면 다음 버튼으로 업로드를 진행할 수 있습니다.
-                      </div>
-                      <div className="rounded-[24px] border border-[var(--line)] bg-white px-4 py-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                              최근 선택
-                            </p>
-                            <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                              {formatSelectionTimestamp(lastSelectedAt)}
-                            </p>
-                          </div>
-                          <span className="rounded-full bg-[var(--accent-soft)] px-4 py-2 text-sm font-semibold text-[var(--accent)]">
-                            총 {selectedUploads.length}장 / {formatBytes(totalUploadSize)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {selectedUploads.map((item) => (
-                          <div key={item.key} className="overflow-hidden rounded-[26px] border border-[var(--line)] bg-white">
-                            <div className="relative flex h-44 items-end bg-[linear-gradient(160deg,_rgba(15,23,42,0.94),_rgba(15,118,110,0.56))] p-4 text-white">
-                              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.16),_transparent_42%)]" />
-                              <div className="relative inset-x-0 bottom-0 text-white">
-                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/72">
-                                  선택된 사진
-                                </p>
-                                <p className="mt-2 line-clamp-2 text-lg font-semibold tracking-[-0.03em]">
-                                  {item.displayName}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="px-4 py-4">
-                              <p className="truncate text-sm font-semibold text-slate-900">
-                                {item.displayName}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {formatBytes(item.file.size)}
-                                {item.file.type ? ` · ${item.file.type}` : ""}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="rounded-[24px] border border-[var(--line)] bg-white px-4 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          선택한 파일 목록
+                  <div className="rounded-[24px] bg-white px-6 py-6 shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-950">
+                          선택한 사진 {selectedUploads.length}장
+                        </h3>
+                        <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                          Total Size: {formatBytes(totalUploadSize)}
                         </p>
-                        <div className="mt-3 grid gap-2">
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="text-xs font-bold text-[var(--accent-secondary)] transition hover:underline"
+                          onClick={handleClearSelectedUploads}
+                          disabled={selectedUploads.length === 0}
+                        >
+                          모두 삭제
+                        </button>
+                        <button
+                          type="button"
+                          className="button-primary rounded-[18px] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={handleUpload}
+                          disabled={isUploading || selectedUploads.length === 0}
+                        >
+                          {isUploading ? "사진 정리 중..." : "사진 정리 시작하기"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {selectedUploads.length > 0 ? (
+                      <>
+                        <div className="mt-6 grid grid-cols-4 gap-3 md:grid-cols-6">
+                          {visibleUploadCards.map((item) => (
+                            <div
+                              key={item.key}
+                              className="group relative aspect-square overflow-hidden rounded-[18px] bg-[var(--sand)]"
+                            >
+                              <Image
+                                src={item.previewUrl}
+                                alt={item.displayName}
+                                width={160}
+                                height={160}
+                                unoptimized
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ))}
+                          {hiddenUploadCount > 0 ? (
+                            <div className="flex aspect-square items-center justify-center rounded-[18px] bg-[rgba(228,226,221,0.92)] text-sm font-bold text-slate-600">
+                              +{hiddenUploadCount}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-6 space-y-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="max-w-[220px] truncate text-slate-500">
+                              {selectedUploads[0]?.displayName}
+                            </span>
+                            <span className="font-bold text-[var(--accent)]">
+                              {isUploading ? "정리 중" : "준비 완료"}
+                            </span>
+                          </div>
+                          <div className="h-1 overflow-hidden rounded-full bg-[rgba(228,226,221,0.92)]">
+                            <div
+                              className={`h-full rounded-full bg-[var(--accent)] transition-all duration-500 ${isUploading ? "w-4/5" : "w-full"}`}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-6 grid gap-2">
                           {selectedUploads.map((item, index) => (
                             <div
                               key={`name-${item.key}`}
@@ -1400,9 +1454,33 @@ export function StudioClient() {
                             </div>
                           ))}
                         </div>
+                      </>
+                    ) : (
+                      <div className="mt-6 rounded-[18px] bg-[rgba(245,243,238,0.72)] px-4 py-4 text-sm leading-6 text-slate-500">
+                        아직 선택된 사진이 없습니다. 위 카드에서 사진을 고르면 이곳에 썸네일과 파일 목록이 바로 나타납니다.
                       </div>
-                    </div>
-                  ) : null}
+                    )}
+                  </div>
+
+                  <div className="flex items-start gap-3 px-2">
+                    <span className="text-lg font-semibold text-[var(--accent-secondary)]">i</span>
+                    <p className="text-xs leading-6 text-slate-500">
+                      위치 태그가 포함된 사진은 더 정확하게 정리됩니다. 개인정보 보호를 위해 위치 정보는 정리 후 즉시 암호화됩니다.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
+                      onClick={handleLoadDemo}
+                    >
+                      샘플 초안으로 바로 보기
+                    </button>
+                    <span className="rounded-full bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent)]">
+                      최근 선택 {formatSelectionTimestamp(lastSelectedAt)}
+                    </span>
+                  </div>
 
                   {uploadError ? (
                     <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700">
