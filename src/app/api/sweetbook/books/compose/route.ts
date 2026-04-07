@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 
 import type { ImportedPhoto, TripIntakeResult } from "@/lib/trip-domain";
+import { travelPhotobookPreset } from "@/lib/sweetbook-catalog";
+import {
+  estimateRequestedTravelPages,
+  extractSweetbookBookSpecs,
+  findSweetbookBookSpec,
+  normalizePageCountForBookSpec,
+} from "@/lib/sweetbook-book-specs";
 import { buildSweetbookTravelBookPlan } from "@/lib/server/sweetbook/book-plan";
 import { sweetbookClient } from "@/lib/server/sweetbook/client";
 import { loadUploadedFile } from "@/lib/server/uploads";
@@ -50,6 +57,27 @@ function replacePhotoReferences(
   return value;
 }
 
+function extractPageCount(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const data =
+    "data" in payload && payload.data && typeof payload.data === "object"
+      ? (payload.data as Record<string, unknown>)
+      : null;
+
+  const candidate = data?.pageCount;
+  return typeof candidate === "number" && Number.isFinite(candidate) ? candidate : null;
+}
+
+function buildFillerParameters(fileNames: string[], sequence: number) {
+  return {
+    dayLabel: `Triplogue Archive ${String(sequence).padStart(2, "0")}`,
+    photos: fileNames,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const draft = (await request.json()) as TripIntakeResult;
@@ -70,6 +98,19 @@ export async function POST(request: Request) {
 
     const plan = buildSweetbookTravelBookPlan(draft);
     const photoById = new Map(draft.photos.map((photo) => [photo.id, photo]));
+    const bookSpecsPayload = await sweetbookClient.listBookSpecs();
+    const resolvedBookSpec = findSweetbookBookSpec(
+      extractSweetbookBookSpecs(bookSpecsPayload),
+      plan.bookSpecUid,
+    );
+    const requestedPageCount = estimateRequestedTravelPages(
+      draft.photos.length,
+      draft.chapters.length,
+    );
+    const targetPageCount = normalizePageCountForBookSpec(
+      requestedPageCount,
+      resolvedBookSpec,
+    );
 
     const createdBook = await sweetbookClient.createBook({
       bookSpecUid: plan.bookSpecUid,
@@ -88,6 +129,7 @@ export async function POST(request: Request) {
     }
 
     const uploadedFileNamesByPhotoId = new Map<string, string>();
+    const uploadedFileNames: string[] = [];
     for (const photo of draft.photos) {
       const file = await requirePhotoAsset(photo);
       const uploadResult = (await sweetbookClient.uploadPhoto(bookUid, file)) as {
@@ -101,6 +143,7 @@ export async function POST(request: Request) {
       }
 
       uploadedFileNamesByPhotoId.set(photo.id, uploadedFileName);
+      uploadedFileNames.push(uploadedFileName);
     }
 
     const coverOperation = plan.operations.find((operation) => operation.kind === "cover");
@@ -120,18 +163,19 @@ export async function POST(request: Request) {
     );
 
     const contentResults = [];
+    let currentPageCount = extractPageCount(coverResult) ?? 0;
     for (const operation of plan.operations.filter((entry) => entry.kind !== "cover")) {
       if (operation.kind === "divider") {
-        contentResults.push(
-          await sweetbookClient.insertContent(
-            bookUid,
-            operation.templateUid,
-            replacePhotoReferences(
-              operation.parameters as JsonLike,
-              uploadedFileNamesByPhotoId,
-            ) as Record<string, unknown>,
-          ),
+        const dividerResult = await sweetbookClient.insertContent(
+          bookUid,
+          operation.templateUid,
+          replacePhotoReferences(
+            operation.parameters as JsonLike,
+            uploadedFileNamesByPhotoId,
+          ) as Record<string, unknown>,
         );
+        contentResults.push(dividerResult);
+        currentPageCount = extractPageCount(dividerResult) ?? currentPageCount;
         continue;
       }
 
@@ -143,19 +187,52 @@ export async function POST(request: Request) {
         }
       }
 
-      contentResults.push(
-        await sweetbookClient.insertContent(
-          bookUid,
-          operation.templateUid,
-          replacePhotoReferences(
-            operation.parameters as JsonLike,
-            uploadedFileNamesByPhotoId,
-          ) as Record<string, unknown>,
-          [],
-          undefined,
-          operation.kind === "publish" ? "photo" : "photos",
-        ),
+      const contentResult = await sweetbookClient.insertContent(
+        bookUid,
+        operation.templateUid,
+        replacePhotoReferences(
+          operation.parameters as JsonLike,
+          uploadedFileNamesByPhotoId,
+        ) as Record<string, unknown>,
+        [],
+        undefined,
+        operation.kind === "publish" ? "photo" : "photos",
       );
+      contentResults.push(contentResult);
+      currentPageCount = extractPageCount(contentResult) ?? currentPageCount;
+    }
+
+    const fillerResults = [];
+    if (uploadedFileNames.length === 0) {
+      throw new Error("Sweetbook compose requires at least one uploaded photo fileName.");
+    }
+
+    const fillerPhotoSet = uploadedFileNames.slice(0, Math.min(4, uploadedFileNames.length));
+    let fillerAttempt = 0;
+    while (currentPageCount < targetPageCount) {
+      fillerAttempt += 1;
+      const fillerResult = await sweetbookClient.insertContent(
+        bookUid,
+        travelPhotobookPreset.templates.contentSecondary,
+        buildFillerParameters(fillerPhotoSet, fillerAttempt),
+        [],
+        "page",
+        "photos",
+      );
+      fillerResults.push(fillerResult);
+
+      const nextPageCount = extractPageCount(fillerResult);
+      if (nextPageCount === null || nextPageCount <= currentPageCount) {
+        throw new Error(
+          `자동 페이지 보정 실패: 현재 ${currentPageCount}p에서 더 증가하지 않았습니다.`,
+        );
+      }
+
+      currentPageCount = nextPageCount;
+
+      if (fillerAttempt > 64) {
+        throw new Error("자동 페이지 보정이 너무 많이 반복되어 중단했습니다.");
+      }
     }
 
     const finalizedBook = await sweetbookClient.finalizeBook(bookUid);
@@ -167,7 +244,14 @@ export async function POST(request: Request) {
         createdBook,
         coverResult,
         contentResults,
+        fillerResults,
         finalizedBook,
+      },
+      pageCountSummary: {
+        requestedPageCount,
+        targetPageCount,
+        actualPageCountBeforeFinalization: currentPageCount,
+        fillerInsertions: fillerResults.length,
       },
     });
   } catch (error) {
