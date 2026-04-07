@@ -668,6 +668,18 @@ export function StudioClient() {
     () => (draft ? buildPhotobookPreviewDocument(draft) : null),
     [draft],
   );
+  const coverPreviewPhoto = useMemo(() => {
+    if (!draft) {
+      return undefined;
+    }
+
+    const previewCoverPhotoId = previewDocument?.spreads[0]?.leadPhotoId;
+    return (
+      (previewCoverPhotoId ? draftPhotoById.get(previewCoverPhotoId) : undefined) ??
+      draft.photos[0]
+    );
+  }, [draft, draftPhotoById, previewDocument]);
+  const coverPreviewSrc = coverPreviewPhoto ? getPhotoSource(coverPreviewPhoto) : null;
   const requestedPageCount = draft
     ? estimateRequestedTravelPages(draft.stats.totalPhotos, draft.chapters.length)
     : 24;
@@ -1457,10 +1469,10 @@ export function StudioClient() {
                     3. 사진 정리
                   </p>
                   <h2 className="mt-3 text-[clamp(1.8rem,3vw,2.6rem)] font-semibold tracking-[-0.05em] text-slate-950">
-                    자동으로 묶인 챕터를 보고, 필요한 사진만 보정합니다.
+                    자동으로 정리된 여행의 순간들입니다.
                   </h2>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-                    GPS 좌표가 있는 사진은 같은 장소끼리 묶고, 없는 사진은 같은 날짜의 시간 흐름을 따라 가까운 그룹에 배치합니다. 위치가 확실치 않은 컷만 수동 태깅하면 됩니다.
+                    촬영 시간과 위치 흐름을 바탕으로 챕터를 만들었습니다. 위치 정보가 비는 사진만 보정하면 바로 포토북 레이아웃으로 넘어갈 수 있습니다.
                   </p>
                 </div>
                 <button
@@ -1479,110 +1491,81 @@ export function StudioClient() {
                 </div>
               ) : (
                 <div className="mt-5 space-y-5">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    {[
-                      ["총 사진", String(draft.stats.totalPhotos)],
-                      ["자동 정리", String(draft.stats.withResolvedLocation)],
-                      ["GPS 포함", String(draft.stats.withGpsCoordinates)],
-                      ["수동 보정 필요", String(draft.stats.manualTaggingRequired)],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-[24px] border border-[var(--line)] bg-white px-4 py-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          {label}
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                          {value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="space-y-12">
+                    {draft.chapters.map((chapter) => {
+                      const chapterPhotos = chapter.photoIds
+                        .map((photoId) => draftPhotoById.get(photoId))
+                        .filter((photo): photo is TripDraftPhoto => Boolean(photo))
+                        .slice(0, 3);
 
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)]">
-                    <div className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {draft.chapters.map((chapter) => {
-                          const leadPhoto = draftPhotoById.get(chapter.photoIds[0]);
-
-                          return (
-                            <div key={chapter.id} className="overflow-hidden rounded-[28px] border border-[var(--line)] bg-white">
-                              <PhotoSurface
-                                photo={leadPhoto}
-                                className="min-h-[12rem] rounded-none border-0"
-                                subtitle={`${chapter.dayLabel} · ${chapter.photoCount}장`}
-                              />
-                              <div className="px-4 py-4">
-                                <p className="text-lg font-semibold tracking-[-0.04em] text-slate-950">
-                                  {chapter.placeLabel}
-                                </p>
-                                <p className="mt-1 text-sm text-slate-600">{chapter.groupingReason}</p>
-                              </div>
+                      return (
+                        <section key={chapter.id}>
+                          <div className="mb-6 flex items-baseline justify-between gap-4">
+                            <div>
+                              <h3 className="text-xl font-semibold tracking-[-0.04em] text-slate-950">
+                                {chapter.dayLabel} - {chapter.placeLabel}
+                              </h3>
+                              <p className="mt-2 text-sm text-slate-500">{chapter.groupingReason}</p>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="rounded-[28px] border border-[var(--line)] bg-[linear-gradient(180deg,_rgba(255,255,255,0.94),_rgba(244,250,249,0.98))] p-5">
-                        <p className="text-sm font-semibold text-slate-950">위치 보정 패널</p>
-                        <p className="mt-3 text-sm leading-6 text-slate-600">
-                          자동 정리에서 빠진 사진만 골라 같은 장소 태그를 붙이면, 챕터가 즉시 다시 계산됩니다.
-                        </p>
-
-                        <label className="mt-4 grid gap-2">
-                          <span className="text-sm font-semibold text-slate-900">장소 이름</span>
-                          <input
-                            value={manualLocationLabel}
-                            onChange={(event) => setManualLocationLabel(event.target.value)}
-                            className="rounded-[22px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
-                            placeholder="예: 아사쿠사 센소지"
-                          />
-                        </label>
-
-                        {suggestedLocations.length > 0 ? (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {suggestedLocations.map((label) => (
-                              <button
-                                key={label}
-                                type="button"
-                                className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-[var(--accent)]"
-                                onClick={() => setManualLocationLabel(label)}
-                              >
-                                {label}
-                              </button>
+                            <span className="text-sm font-medium text-slate-500">
+                              {chapter.photoCount}장
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                            {chapterPhotos.map((photo, index) => (
+                              <PhotoSurface
+                                key={photo.id}
+                                photo={photo}
+                                showOverlay={false}
+                                className={`${index === 2 ? "hidden md:block" : ""} min-h-[13rem] rounded-[20px]`}
+                              />
                             ))}
                           </div>
-                        ) : null}
+                        </section>
+                      );
+                    })}
 
-                        <div className="mt-4 flex flex-wrap gap-3">
-                          <button
-                            type="button"
-                            className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white"
-                            onClick={handleApplyManualTag}
-                          >
-                            선택 사진에 태그 적용
-                          </button>
-                          <button
-                            type="button"
-                            className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                            onClick={() =>
-                              setSelectedPhotoIds(
-                                photosNeedingManualTagging.map((photo) => photo.id),
-                              )
-                            }
-                          >
-                            보정 필요 사진 전체 선택
-                          </button>
+                    <section className="rounded-[28px] border border-[rgba(191,201,196,0.12)] bg-[var(--sand)] px-6 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[rgba(160,62,64,0.12)] text-[var(--accent-secondary)]">
+                          <span className="text-xl">+</span>
                         </div>
-
-                        {reviewFeedback ? (
-                          <div className="mt-4 rounded-[22px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                            {reviewFeedback}
-                          </div>
-                        ) : null}
+                        <div>
+                          <h3 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                            위치 정보 없음
+                          </h3>
+                          <p className="text-sm text-slate-500">
+                            일부 사진은 직접 장소를 붙여줘야 합니다.
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="space-y-3">
+                      <label className="mt-6 grid gap-2">
+                        <span className="text-sm font-semibold text-slate-900">장소 이름</span>
+                        <input
+                          value={manualLocationLabel}
+                          onChange={(event) => setManualLocationLabel(event.target.value)}
+                          className="rounded-[18px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
+                          placeholder="예: 아사쿠사 센소지"
+                        />
+                      </label>
+
+                      {suggestedLocations.length > 0 ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {suggestedLocations.map((label) => (
+                            <button
+                              key={label}
+                              type="button"
+                              className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:text-[var(--accent)]"
+                              onClick={() => setManualLocationLabel(label)}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      <div className="mt-5 space-y-3">
                         {photosNeedingManualTagging.length > 0 ? (
                           photosNeedingManualTagging.map((photo) => {
                             const isSelected = selectedPhotoIds.includes(photo.id);
@@ -1590,43 +1573,72 @@ export function StudioClient() {
                             return (
                               <label
                                 key={photo.id}
-                                className={`flex cursor-pointer gap-4 rounded-[24px] border px-4 py-4 transition ${
-                                  isSelected
-                                    ? "border-[var(--accent)] bg-[rgba(15,118,110,0.06)]"
-                                    : "border-[var(--line)] bg-white hover:border-[rgba(15,118,110,0.3)]"
+                                className={`flex cursor-pointer items-center justify-between gap-4 rounded-[20px] bg-white px-4 py-4 transition ${
+                                  isSelected ? "ring-1 ring-[rgba(0,52,43,0.22)]" : ""
                                 }`}
                               >
-                                <input
-                                  type="checkbox"
-                                  className="mt-1"
-                                  checked={isSelected}
-                                  onChange={() =>
-                                    setSelectedPhotoIds((current) =>
-                                      current.includes(photo.id)
-                                        ? current.filter((item) => item !== photo.id)
-                                        : [...current, photo.id],
-                                    )
-                                  }
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-semibold text-slate-950">
-                                    {photo.originalName}
-                                  </p>
-                                  <p className="mt-1 text-sm text-slate-600">{photo.groupingReason}</p>
-                                  <p className="mt-2 text-xs text-slate-500">
-                                    {formatDateLabel(photo.capturedAt)}
-                                  </p>
+                                <div className="flex min-w-0 items-center gap-4">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4"
+                                    checked={isSelected}
+                                    onChange={() =>
+                                      setSelectedPhotoIds((current) =>
+                                        current.includes(photo.id)
+                                          ? current.filter((item) => item !== photo.id)
+                                          : [...current, photo.id],
+                                      )
+                                    }
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-slate-950">
+                                      {photo.originalName}
+                                    </p>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                      {formatDateLabel(photo.capturedAt)}
+                                    </p>
+                                  </div>
                                 </div>
+                                <span className="text-xs font-medium text-slate-500">
+                                  위치 추가
+                                </span>
                               </label>
                             );
                           })
                         ) : (
-                          <div className="rounded-[24px] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-5 py-5 text-sm leading-6 text-slate-700">
-                            위치가 비는 사진이 없습니다. 바로 포토북 디자인으로 넘어가도 됩니다.
+                          <div className="rounded-[20px] bg-white px-4 py-4 text-sm leading-6 text-slate-600">
+                            위치가 비는 사진이 없습니다. 바로 포토북 포맷 선택으로 넘어가면 됩니다.
                           </div>
                         )}
                       </div>
-                    </div>
+
+                      <div className="mt-5 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white"
+                          onClick={handleApplyManualTag}
+                        >
+                          선택 사진에 태그 적용
+                        </button>
+                        <button
+                          type="button"
+                          className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
+                          onClick={() =>
+                            setSelectedPhotoIds(
+                              photosNeedingManualTagging.map((photo) => photo.id),
+                            )
+                          }
+                        >
+                          전체 선택
+                        </button>
+                      </div>
+
+                      {reviewFeedback ? (
+                        <div className="mt-4 rounded-[18px] bg-white px-4 py-3 text-sm text-[var(--accent)]">
+                          {reviewFeedback}
+                        </div>
+                      ) : null}
+                    </section>
                   </div>
                 </div>
               )}
@@ -1668,26 +1680,109 @@ export function StudioClient() {
                         <button
                           key={theme.id}
                           type="button"
-                          className={`text-left transition ${isSelected ? "-translate-y-1" : "hover:-translate-y-0.5"}`}
+                          className={`group text-left transition ${isSelected ? "-translate-y-1" : "hover:-translate-y-0.5"}`}
                           onClick={() => handleThemeChange(theme.id)}
                         >
                           <article
-                            className={`overflow-hidden rounded-[28px] border bg-white p-5 shadow-[0_14px_30px_rgba(15,23,42,0.05)] ${isSelected ? "border-[rgba(15,118,110,0.32)] ring-2 ring-[rgba(15,118,110,0.14)]" : "border-[var(--line)]"}`}
+                            className={`overflow-hidden rounded-[24px] bg-[var(--surface-container-low,rgba(245,243,238,0.96))] p-6 ${isSelected ? "ring-2 ring-[rgba(0,52,43,0.24)]" : "ring-1 ring-[rgba(191,201,196,0.2)]"}`}
                           >
-                            <div className={`rounded-[24px] px-4 py-4 ${theme.spotlightClassName}`}>
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-lg font-semibold tracking-[-0.04em] text-slate-950">
-                                  {theme.name}
-                                </p>
-                                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${theme.badgeClassName}`}>
-                                  {theme.accentLabel}
-                                </span>
+                            <div className="relative mb-6">
+                              {isSelected ? (
+                                <div className="absolute right-0 top-0 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-lg">
+                                  <span className="text-sm font-semibold">✓</span>
+                                </div>
+                              ) : null}
+                              <div className="flex justify-center py-4 [perspective:1000px]">
+                                <div className="overflow-hidden rounded-[6px] border-l-4 border-white/20 shadow-[10px_20px_40px_rgba(0,0,0,0.08)] transition duration-500 [transform:rotateY(-20deg)_rotateX(5deg)] group-hover:scale-[1.03]">
+                                  <div className="h-64 w-48 bg-white p-4">
+                                    {theme.id === "timeline-classic" ? (
+                                      <div className="flex h-full flex-col">
+                                        <div className="overflow-hidden rounded-[4px]">
+                                          {coverPreviewSrc ? (
+                                            <Image
+                                              src={coverPreviewSrc}
+                                              alt={theme.name}
+                                              width={192}
+                                              height={160}
+                                              unoptimized
+                                              className="h-40 w-full object-cover"
+                                            />
+                                          ) : (
+                                            <div className="h-40 w-full bg-[var(--sand)]" />
+                                          )}
+                                        </div>
+                                        <div className="mt-4 flex-1">
+                                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent-secondary)]">
+                                            Chapter 01
+                                          </p>
+                                          <p className="mt-3 text-lg font-semibold tracking-[-0.04em] text-[var(--accent)]">
+                                            {draft?.tripName ?? "Triplogue"}
+                                          </p>
+                                          <div className="mt-4 h-1.5 w-16 rounded-full bg-[var(--sand)]" />
+                                        </div>
+                                      </div>
+                                    ) : theme.id === "postcard-map" ? (
+                                      <div className="flex h-full flex-col">
+                                        <div className="relative overflow-hidden rounded-[4px] bg-[var(--sand)]">
+                                          {coverPreviewSrc ? (
+                                            <Image
+                                              src={coverPreviewSrc}
+                                              alt={theme.name}
+                                              width={192}
+                                              height={128}
+                                              unoptimized
+                                              className="h-32 w-full object-cover opacity-45 mix-blend-multiply"
+                                            />
+                                          ) : (
+                                            <div className="h-32 w-full bg-[var(--sand)]" />
+                                          )}
+                                          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 200 120">
+                                            <path
+                                              d="M30,24 Q96,42 152,88"
+                                              fill="none"
+                                              stroke="#00342b"
+                                              strokeDasharray="6 6"
+                                              strokeWidth="2"
+                                            />
+                                          </svg>
+                                          <span className="absolute left-8 top-6 h-3 w-3 rounded-full bg-[var(--accent)] shadow-[0_0_0_8px_rgba(0,52,43,0.12)]" />
+                                          <span className="absolute bottom-6 right-10 h-3 w-3 rounded-full bg-[var(--accent-secondary)] shadow-[0_0_0_8px_rgba(160,62,64,0.12)]" />
+                                        </div>
+                                        <div className="mt-4 space-y-2">
+                                          <div className="h-2 w-24 rounded-full bg-[var(--sand)]" />
+                                          <div className="h-2 w-16 rounded-full bg-[var(--sand)]" />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="flex h-full flex-col items-center justify-center text-center">
+                                        <div className="overflow-hidden rounded-[4px]">
+                                          {coverPreviewSrc ? (
+                                            <Image
+                                              src={coverPreviewSrc}
+                                              alt={theme.name}
+                                              width={192}
+                                              height={160}
+                                              unoptimized
+                                              className="h-40 w-full object-cover"
+                                            />
+                                          ) : (
+                                            <div className="h-40 w-full bg-[var(--sand)]" />
+                                          )}
+                                        </div>
+                                        <div className="mt-4 space-y-2">
+                                          <div className="mx-auto h-1.5 w-16 rounded-full bg-[var(--sand)]" />
+                                          <div className="mx-auto h-1.5 w-12 rounded-full bg-[var(--sand)]" />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <p className="mt-3 text-sm leading-6 text-slate-700">{theme.note}</p>
                             </div>
-                            <p className="mt-4 text-sm leading-6 text-slate-600">
-                              {theme.editorialNote}
-                            </p>
+                            <h3 className={`text-xl font-semibold ${isSelected ? "text-[var(--accent)]" : "text-slate-950"}`}>
+                              {theme.name}
+                            </h3>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">{theme.note}</p>
                           </article>
                         </button>
                       );
@@ -1785,154 +1880,119 @@ export function StudioClient() {
                     5. Sweetbook 생성
                   </p>
                   <h2 className="mt-3 text-[clamp(1.8rem,3vw,2.6rem)] font-semibold tracking-[-0.05em] text-slate-950">
-                    검토한 초안을 실제 테스트 책과 주문으로 넘깁니다.
+                    마지막으로 주문 정보를 확인해주세요.
                   </h2>
                   <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
-                    이 단계가 끝나면 bookUid와 orderUid가 생기고, 운영 화면에서 웹훅 이벤트까지 이어서 확인할 수 있습니다.
+                    거의 다 왔습니다. 테스트 책을 만들고 배송 정보를 확인한 뒤 주문 흐름까지 한 번에 마무리합니다.
                   </p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={handleComposeBook}
-                    disabled={!draft || isComposing}
-                  >
-                    {isComposing ? "Sweetbook 테스트 책 생성 중..." : "Sweetbook 테스트 책 생성"}
-                  </button>
-                  <Link
-                    href="/ops/webhooks"
-                    className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                  >
-                    웹훅 운영 보기
-                  </Link>
                 </div>
               </div>
 
-              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                <div className="space-y-4">
-                  <div className="rounded-[28px] border border-[var(--line)] bg-white px-5 py-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      생성 전 요약
-                    </p>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-[22px] bg-[var(--accent-soft)] px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                          사진
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {draft?.stats.totalPhotos ?? 0}장
-                        </p>
-                      </div>
-                      <div className="rounded-[22px] border border-[var(--line)] px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          챕터
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {draft?.chapters.length ?? 0}개
-                        </p>
-                      </div>
-                      <div className="rounded-[22px] border border-[var(--line)] px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          포맷
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {resolvedTheme.name}
-                        </p>
-                      </div>
-                      <div className="rounded-[22px] border border-[var(--line)] px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                          예상 페이지
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-slate-950">
-                          {pageCount}p
-                        </p>
+              <div className="mt-8 space-y-8">
+                <div className="rounded-[28px] bg-[var(--surface-container-low,rgba(245,243,238,0.96))] px-6 py-6 md:px-8 md:py-8">
+                  <div className="flex flex-col gap-8 md:flex-row md:items-start">
+                    <div className="w-full md:w-[13rem]">
+                      <div className="overflow-hidden rounded-[20px] bg-white shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
+                        <PhotoSurface
+                          photo={coverPreviewPhoto}
+                          showOverlay={false}
+                          className="min-h-[16rem] rounded-none border-0"
+                        />
                       </div>
                     </div>
-                    {composeError ? (
-                      <div className="mt-4 rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                        {composeError}
+                    <div className="flex-1 space-y-6">
+                      <div>
+                        <h3 className="text-xl font-semibold tracking-[-0.04em] text-slate-950">
+                          {previewDocument?.cover.title ?? draft?.tripName ?? "Triplogue"}
+                        </h3>
+                        <p className="mt-2 text-sm text-slate-500">
+                          {resolvedTheme.name} · {productLabel}
+                        </p>
                       </div>
-                    ) : null}
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                            Photo Count
+                          </span>
+                          <span className="mt-1 block font-medium text-slate-950">
+                            {draft?.stats.totalPhotos ?? 0}장
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                            Selected Date
+                          </span>
+                          <span className="mt-1 block font-medium text-slate-950">
+                            {draft?.travelStart ?? "미정"}
+                          </span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="block text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                            Format
+                          </span>
+                          <span className="mt-1 block font-medium text-slate-950">
+                            {productLabel} / {productDimension}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={handleComposeBook}
+                          disabled={!draft || isComposing}
+                        >
+                          {isComposing ? "테스트 책 생성 중..." : "테스트 책 생성"}
+                        </button>
+                        <Link
+                          href="/ops/webhooks"
+                          className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
+                        >
+                          웹훅 운영 보기
+                        </Link>
+                      </div>
+                    </div>
                   </div>
-
-                  {composeResult ? (
-                    <div className="rounded-[28px] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-5 py-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                        생성 완료
-                      </p>
-                      <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                        bookUid {composeResult.bookUid}
-                      </p>
-                      <p className="mt-3 text-sm leading-6 text-slate-700">
-                        {composeResult.operationCount ?? 0}개 조립 단계와 {composeResult.contentCount ?? 0}개 본문 처리가 완료됐습니다.
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {orderResult ? (
-                    <div className="rounded-[28px] border border-[rgba(243,123,87,0.18)] bg-[rgba(243,123,87,0.08)] px-5 py-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent-secondary)]">
-                        주문 완료
-                      </p>
-                      <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                        orderUid {orderResult.orderUid ?? "확인 중"}
-                      </p>
-                      <p className="mt-3 text-sm leading-6 text-slate-700">
-                        상태 {orderResult.orderStatusDisplay ?? "확인 중"} · 금액{" "}
-                        {orderResult.totalAmount
-                          ? `${orderResult.totalAmount.toLocaleString("ko-KR")}원`
-                          : "확인 중"}
-                      </p>
+                  {composeError ? (
+                    <div className="mt-5 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {composeError}
                     </div>
                   ) : null}
                 </div>
 
-                <div className="rounded-[28px] border border-[var(--line)] bg-white px-5 py-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        배송지 입력
-                      </p>
-                      <p className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                        테스트 책 생성 후 주문까지 이어갑니다.
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between border-b border-[rgba(191,201,196,0.2)] pb-2">
+                    <h3 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                      배송 정보
+                    </h3>
+                    <span className="text-sm font-medium text-[var(--accent)]">
                       {composeResult ? "주문 가능" : "책 생성 후 활성화"}
                     </span>
                   </div>
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-4">
                     {[
                       ["ordererName", "주문자 이름", "홍길동", "text"],
-                      ["bookUid", "bookUid", "생성 후 자동 입력", "text"],
-                      ["recipientName", "받는 분 이름", "홍길동", "text"],
+                      ["recipientName", "받는 사람", "홍길동", "text"],
                       ["recipientPhone", "연락처", "010-1234-5678", "text"],
                       ["postalCode", "우편번호", "06123", "text"],
-                      ["quantity", "수량", "1", "number"],
-                      ["address1", "주소 1", "서울시 강남구 테헤란로 123", "text"],
-                      ["address2", "주소 2", "5층 501호", "text"],
+                      ["address1", "주소", "서울시 강남구 테헤란로 123, 4층", "text"],
+                      ["address2", "상세 주소", "5층 501호", "text"],
                       ["memo", "배송 메모", "문 앞에 놓아 주세요", "text"],
                     ].map(([key, label, placeholder, type]) => (
-                      <label
-                        key={key}
-                        className={`grid gap-2 ${key === "address1" || key === "address2" || key === "memo" ? "sm:col-span-2" : ""}`}
-                      >
-                        <span className="text-sm font-semibold text-slate-900">{label}</span>
+                      <label key={key} className="grid gap-1.5">
+                        <span className="ml-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                          {label}
+                        </span>
                         <input
                           type={type}
                           value={String(orderDraft[key as keyof CheckoutOrderDraft])}
-                          disabled={!composeResult && key === "bookUid"}
                           onChange={(event) =>
                             setOrderDraft((current) => ({
                               ...current,
-                              [key]:
-                                key === "quantity"
-                                  ? Number(event.target.value || 1)
-                                  : event.target.value,
+                              [key]: event.target.value,
                             }))
                           }
-                          className="rounded-[22px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)] disabled:bg-slate-100"
+                          className="rounded-[18px] border-none bg-[var(--sand)] px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.18)]"
                           placeholder={placeholder}
                         />
                         {orderErrors[key as keyof CheckoutOrderDraft] ? (
@@ -1942,31 +2002,108 @@ export function StudioClient() {
                         ) : null}
                       </label>
                     ))}
+                    <label className="grid gap-1.5">
+                      <span className="ml-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                        bookUid
+                      </span>
+                      <input
+                        type="text"
+                        value={orderDraft.bookUid}
+                        disabled
+                        className="rounded-[18px] border-none bg-[var(--sand)] px-4 py-3 text-sm text-slate-900 outline-none disabled:opacity-70"
+                        placeholder="생성 후 자동 입력"
+                      />
+                    </label>
+                    <label className="grid gap-1.5">
+                      <span className="ml-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                        수량
+                      </span>
+                      <input
+                        type="number"
+                        value={String(orderDraft.quantity)}
+                        onChange={(event) =>
+                          setOrderDraft((current) => ({
+                            ...current,
+                            quantity: Number(event.target.value || 1),
+                          }))
+                        }
+                        className="rounded-[18px] border-none bg-[var(--sand)] px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.18)]"
+                        placeholder="1"
+                      />
+                    </label>
                   </div>
+                </div>
 
-                  {orderError ? (
-                    <div className="mt-4 rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                      {orderError}
+                <div className="rounded-[24px] bg-[rgba(228,226,221,0.52)] px-6 py-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>포토북 제작 비용</span>
+                      <span>{estimatedPrice.toLocaleString("ko-KR")}원</span>
                     </div>
-                  ) : null}
-
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={handleCreateOrder}
-                      disabled={!composeResult || isOrdering}
-                    >
-                      {isOrdering ? "주문 생성 중..." : "주문 생성"}
-                    </button>
-                    <button
-                      type="button"
-                      className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                      onClick={handleResetAll}
-                    >
-                      새 여행 다시 시작
-                    </button>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>배송비</span>
+                      <span>3,000원</span>
+                    </div>
+                    <div className="flex items-end justify-between border-t border-[rgba(191,201,196,0.28)] pt-4">
+                      <div>
+                        <span className="text-sm text-slate-500">최종 결제 금액</span>
+                        <h4 className="mt-1 text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                          {(estimatedPrice + 3000).toLocaleString("ko-KR")}원
+                        </h4>
+                      </div>
+                      <span className="text-xs font-medium text-[var(--accent-secondary)]">
+                        배송비 포함
+                      </span>
+                    </div>
                   </div>
+                </div>
+
+                <label className="flex items-start gap-3 rounded-[18px] bg-white px-5 py-4">
+                  <input type="checkbox" className="mt-1 h-4 w-4" />
+                  <span className="text-xs leading-6 text-slate-600">
+                    주문 내용을 확인했으며, 테스트 흐름상 결제 이후 제작 단계로 넘어간다고 가정합니다.
+                  </span>
+                </label>
+
+                {composeResult ? (
+                  <div className="rounded-[20px] bg-[rgba(15,118,110,0.06)] px-5 py-4 text-sm leading-6 text-slate-700">
+                    bookUid {composeResult.bookUid} · {composeResult.operationCount ?? 0}개 조립 단계와{" "}
+                    {composeResult.contentCount ?? 0}개 본문 처리가 완료됐습니다.
+                  </div>
+                ) : null}
+
+                {orderResult ? (
+                  <div className="rounded-[20px] bg-[rgba(160,62,64,0.08)] px-5 py-4 text-sm leading-6 text-slate-700">
+                    orderUid {orderResult.orderUid ?? "확인 중"} · 상태{" "}
+                    {orderResult.orderStatusDisplay ?? "확인 중"} · 금액{" "}
+                    {orderResult.totalAmount
+                      ? `${orderResult.totalAmount.toLocaleString("ko-KR")}원`
+                      : "확인 중"}
+                  </div>
+                ) : null}
+
+                {orderError ? (
+                  <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {orderError}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={handleCreateOrder}
+                    disabled={!composeResult || isOrdering}
+                  >
+                    {isOrdering ? "주문 생성 중..." : "주문 및 결제하기"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
+                    onClick={handleResetAll}
+                  >
+                    새 여행 다시 시작
+                  </button>
                 </div>
               </div>
             </section>
