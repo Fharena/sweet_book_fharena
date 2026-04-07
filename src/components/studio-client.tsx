@@ -2,15 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { flushSync } from "react-dom";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useTransition,
   type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import type {
@@ -31,19 +31,20 @@ import {
 } from "@/lib/checkout-order";
 import {
   createDemoTripDraft,
-  demoTripQuickFacts,
-  isDemoTripDraft,
 } from "@/lib/demo-trip-draft";
 import { buildUploadedPhotoSrc } from "@/lib/photo-assets";
 import {
   buildPhotobookPreviewDocument,
   type PhotobookPreviewSpread,
 } from "@/lib/photobook-preview";
+import { isMeaningfulLocationLabel } from "@/lib/trip-grouping";
 import { estimateRequestedTravelPages } from "@/lib/sweetbook-book-specs";
 import {
+  applyManualDateTagToDraft,
   applyManualLocationTagToDraft,
   applyThemeSelectionToDraft,
   clearTripDraft,
+  removePhotosFromDraft,
   saveTripDraft,
 } from "@/lib/trip-draft";
 import type { TripDraft, TripDraftPhoto } from "@/lib/trip-draft";
@@ -78,7 +79,14 @@ type SelectedUploadFile = {
   key: string;
   file: File;
   displayName: string;
-  previewUrl: string;
+  previewUrl: string | null;
+  signature: string;
+  duplicateKind: "none" | "existing" | "selection";
+};
+
+type UploadDiagnosticEntry = {
+  id: string;
+  message: string;
 };
 
 const studioSteps: Array<{
@@ -124,6 +132,53 @@ const studioSteps: Array<{
     copy: "책 생성 후 배송지까지 입력하면 제출용 데모 플로우가 한 번에 완성됩니다.",
   },
 ];
+
+const stitchStepOneVisual =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuBD98wdimewvmJ6ARaZBwvc8emZsFushy3D7wm8QtaElcVYT-JvkGbvWXvcAzVQbM2aoP8E6spQPOSc4ht0bBLk_sm5CyfbZc1XYU246fwuKFeETbOjLG4gXbT1H4KbFJMj_-iqZ-gVwkH_hwpivsz4F55ykz9yb5Z1h_71I0v8Ba4pjnuwTLphnvd3uxWMKwss1aB8JL2M8DAmwevrDKeqWBERKUr6sFgiNvxW_Ee-fH8GefKtS5syskR4vzDNCiYddQqZFbfvAHo";
+
+const UPLOAD_DIAGNOSTICS_STORAGE_KEY = "triplogue:upload-diagnostics";
+const NATIVE_FILE_SYNC_NOTE_KEY = "triplogue:native-file-sync-note";
+
+function safeGetSessionStorageItem(key: string) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetSessionStorageItem(key: string, value: string) {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures on restricted mobile browsers.
+  }
+}
+
+function safeRemoveSessionStorageItem(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures on restricted mobile browsers.
+  }
+}
+
+type NativePickerSnapshot = {
+  value: string;
+  fileCount: number;
+  fileNames: string[];
+  totalSize: number;
+};
+
+type ReviewSelectionKind = "date" | "location";
+
+type ReviewSelectionBox = {
+  kind: ReviewSelectionKind;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 
 const emptyOrderDraft: CheckoutOrderDraft = {
   ordererName: "",
@@ -176,27 +231,38 @@ function formatDateLabel(value: string | null) {
   }).format(date);
 }
 
-function getRequestedStep(value: string | null): StudioStepId | null {
-  switch (value) {
-    case "trip":
-    case "upload":
-    case "review":
-    case "preview":
-    case "publish":
-      return value;
-    case "new":
-      return "upload";
-    default:
-      return null;
-  }
+function getStudioStepHref(step: StudioStepId) {
+  return `/studio?step=${step}`;
 }
 
 function getFileKey(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
+function getUploadSignature(name: string, size: number) {
+  return `${name}:${size}`;
+}
+
+function dedupeFilesByKey(files: File[]) {
+  const seen = new Set<string>();
+  return files.filter((file) => {
+    const key = getFileKey(file);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
 function isAcceptedImageFile(file: File) {
-  return file.size >= 0;
+  const normalizedName = file.name.trim().toLowerCase();
+  const hasRealPayload = file.size > 0 || normalizedName.length > 0;
+  const looksLikeImage =
+    file.type.startsWith("image/") ||
+    /\.(jpg|jpeg|png|webp|heic|heif)$/i.test(normalizedName);
+
+  return hasRealPayload && looksLikeImage && file.size > 0;
 }
 
 function getFallbackImageExtension(file: File) {
@@ -219,35 +285,78 @@ function getFallbackImageExtension(file: File) {
   return ".jpg";
 }
 
-function normalizeSelectedFile(file: File, index: number) {
+function normalizeSelectedFile(
+  file: File,
+  index: number,
+  duplicateKind: SelectedUploadFile["duplicateKind"] = "none",
+) {
   const displayName =
     file.name.trim() ||
     `mobile-photo-${Date.now()}-${index + 1}${getFallbackImageExtension(file)}`;
+
+  let previewUrl: string | null = null;
+
+  try {
+    previewUrl = URL.createObjectURL(file);
+  } catch {
+    previewUrl = null;
+  }
 
   return {
     key: `${index}-${getFileKey(file) || displayName}`,
     file,
     displayName,
-    previewUrl: URL.createObjectURL(file),
+    previewUrl,
+    signature: getUploadSignature(displayName, file.size),
+    duplicateKind,
   } satisfies SelectedUploadFile;
 }
 
-function formatSelectionTimestamp(value: string | null) {
-  if (!value) {
-    return "방금 선택";
+function buildSelectedUploadItems(
+  files: File[],
+  existingUploadSignatures: Set<string>,
+  currentSelections: SelectedUploadFile[] = [],
+) {
+  const selectionSignatures = new Set(currentSelections.map((item) => item.signature));
+
+  const appended = files
+    .map((file, index) => {
+    const displayName =
+      file.name.trim() ||
+      `mobile-photo-${Date.now()}-${index + 1}${getFallbackImageExtension(file)}`;
+    const signature = getUploadSignature(displayName, file.size);
+      if (selectionSignatures.has(signature)) {
+        return null;
+      }
+      const duplicateKind: SelectedUploadFile["duplicateKind"] = existingUploadSignatures.has(signature)
+        ? "existing"
+        : "none";
+
+    selectionSignatures.add(signature);
+    return normalizeSelectedFile(file, currentSelections.length + index, duplicateKind);
+    })
+    .filter((item): item is SelectedUploadFile => Boolean(item));
+
+  return [...currentSelections, ...appended];
+}
+
+function formatDateKeyBadge(dateKey: string) {
+  if (dateKey === "undated") {
+    return "미지정";
   }
 
-  const date = new Date(value);
+  const date = new Date(`${dateKey}T00:00:00`);
   if (Number.isNaN(date.getTime())) {
-    return "방금 선택";
+    return dateKey;
   }
 
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${month}/${day}`;
+}
+
+function clampSelectionValue(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function buildOrderPayload(draft: CheckoutOrderDraft): OrderPayload {
@@ -358,6 +467,99 @@ function PhotoSurface({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function SelectablePhotoCard({
+  photo,
+  selected,
+  onToggle,
+  suppressClicksUntil,
+  badge,
+  helper,
+}: {
+  photo: TripDraftPhoto;
+  selected: boolean;
+  onToggle: () => void;
+  suppressClicksUntil: number;
+  badge?: string | null;
+  helper?: string | null;
+}) {
+  const src = getPhotoSource(photo);
+
+  function handleClick() {
+    if (Date.now() < suppressClicksUntil) {
+      return;
+    }
+
+    onToggle();
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    onToggle();
+  }
+
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={selected}
+      aria-label={`${photo.originalName} 선택`}
+      data-selectable-photo-id={photo.id}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className={`group relative block w-full cursor-pointer overflow-hidden rounded-[22px] border bg-transparent p-0 text-left transition duration-200 ${
+        selected
+          ? "border-[rgba(0,52,43,0.3)] ring-2 ring-[rgba(0,52,43,0.18)] shadow-[0_14px_32px_rgba(0,52,43,0.08)]"
+          : "border-[rgba(191,201,196,0.18)] hover:-translate-y-1 hover:border-[rgba(0,52,43,0.24)] hover:shadow-[0_14px_28px_rgba(15,23,42,0.08)]"
+      }`}
+    >
+      <div className="relative aspect-[9/10] bg-[var(--sand)]">
+        {src ? (
+          <Image
+            src={src}
+            alt={photo.originalName}
+            fill
+            unoptimized
+            draggable={false}
+            sizes="(max-width: 768px) 45vw, 20vw"
+            className="pointer-events-none select-none object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-4 text-center text-xs font-semibold text-slate-500">
+            이미지 미리보기 없음
+          </div>
+        )}
+        <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,_transparent,_rgba(15,23,42,0.78))] px-3 py-3 text-white">
+          <p className="truncate text-xs font-semibold">{photo.originalName}</p>
+          <p className="mt-1 text-[10px] text-white/78">
+            {helper ?? formatDateLabel(photo.capturedAt)}
+          </p>
+        </div>
+        <div className="pointer-events-none absolute inset-x-3 bottom-14 rounded-full bg-[rgba(255,255,255,0.9)] px-3 py-2 text-center text-[10px] font-semibold text-[var(--accent)] opacity-0 transition group-hover:opacity-100">
+          클릭하거나 드래그해서 선택
+        </div>
+        <div className="absolute left-3 top-3 flex items-center gap-2">
+          <span
+            className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+              selected ? "bg-[var(--accent)] text-white" : "bg-white/88 text-slate-700"
+            }`}
+          >
+            {selected ? "✓" : ""}
+          </span>
+          {badge ? (
+            <span className="rounded-full bg-[rgba(15,23,42,0.72)] px-2.5 py-1 text-[10px] font-bold text-white">
+              {badge}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -557,19 +759,36 @@ function PreviewSpreadCard({
   );
 }
 
-export function StudioClient() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+type StudioClientProps = {
+  initialStep?: StudioStepId;
+  loadDemoOnStart?: boolean;
+};
+
+export function StudioClient({
+  initialStep = "trip",
+  loadDemoOnStart = false,
+}: StudioClientProps) {
   const { draft } = useTripDraft();
+  const uploadFormRef = useRef<HTMLFormElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dateSelectionGridRef = useRef<HTMLDivElement | null>(null);
+  const locationSelectionGridRef = useRef<HTMLDivElement | null>(null);
+  const uploadStepLogSeededRef = useRef(false);
   const [selectedUploads, setSelectedUploads] = useState<SelectedUploadFile[]>([]);
-  const [lastSelectedAt, setLastSelectedAt] = useState<string | null>(null);
+  const [, setLastSelectedAt] = useState<string | null>(null);
   const [tripName, setTripName] = useState("새 여행");
   const [travelStart, setTravelStart] = useState("");
   const [travelEnd, setTravelEnd] = useState("");
   const [manualLocationLabel, setManualLocationLabel] = useState("");
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
-  const [activeStep, setActiveStep] = useState<StudioStepId>("trip");
+  const [manualDateLabel, setManualDateLabel] = useState("");
+  const [selectedDatePhotoIds, setSelectedDatePhotoIds] = useState<string[]>([]);
+  const [reviewDateFilter, setReviewDateFilter] = useState<string>("all");
+  const [reviewLocationFilter, setReviewLocationFilter] = useState<string>("all");
+  const [reviewSelectionBox, setReviewSelectionBox] = useState<ReviewSelectionBox | null>(null);
+  const [suppressSelectableClicksUntil, setSuppressSelectableClicksUntil] = useState(0);
+  const [activeStepState, setActiveStep] = useState<StudioStepId>(initialStep);
+  const [isStepDrawerOpen, setIsStepDrawerOpen] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [reviewFeedback, setReviewFeedback] = useState<string | null>(null);
   const [composeError, setComposeError] = useState<string | null>(null);
@@ -583,16 +802,22 @@ export function StudioClient() {
   const [isUploading, setIsUploading] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
-  const [, startTransition] = useTransition();
-
-  const files = useMemo(
-    () => selectedUploads.map((item) => item.file),
-    [selectedUploads],
-  );
+  const [, setUploadDiagnostics] = useState<UploadDiagnosticEntry[]>([]);
+  const [, setNativeFileSyncNote] = useState<string | null>(null);
+  const [nativePickerSnapshot, setNativePickerSnapshot] = useState<NativePickerSnapshot>({
+    value: "",
+    fileCount: 0,
+    fileNames: [],
+    totalSize: 0,
+  });
 
   useEffect(() => {
     return () => {
-      selectedUploads.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      selectedUploads.forEach((item) => {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      });
     };
   }, [selectedUploads]);
 
@@ -600,6 +825,22 @@ export function StudioClient() {
     setComposeResult(loadCheckoutComposeResult());
     setOrderResult(loadCheckoutOrderResult());
     setOrderDraft(loadCheckoutOrderDraft() ?? emptyOrderDraft);
+    if (typeof window !== "undefined") {
+      const savedDiagnostics = safeGetSessionStorageItem(UPLOAD_DIAGNOSTICS_STORAGE_KEY);
+      if (savedDiagnostics) {
+        try {
+          const parsed = JSON.parse(savedDiagnostics) as UploadDiagnosticEntry[];
+          setUploadDiagnostics(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setUploadDiagnostics([]);
+        }
+      }
+
+      const savedSyncNote = safeGetSessionStorageItem(NATIVE_FILE_SYNC_NOTE_KEY);
+      if (savedSyncNote) {
+        setNativeFileSyncNote(savedSyncNote);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -613,14 +854,7 @@ export function StudioClient() {
   }, [draft]);
 
   useEffect(() => {
-    const hasDemoQuery = searchParams.get("demo") === "1";
-    const requestedStep = getRequestedStep(searchParams.get("step"));
-
-    if (!hasDemoQuery && !requestedStep) {
-      return;
-    }
-
-    if (hasDemoQuery) {
+    if (loadDemoOnStart) {
       saveTripDraft(createDemoTripDraft());
       clearCheckoutComposeResult();
       clearCheckoutOrderDraft();
@@ -629,14 +863,32 @@ export function StudioClient() {
       setOrderResult(null);
       setOrderDraft(emptyOrderDraft);
       setActiveStep("review");
-    } else if (requestedStep) {
-      setActiveStep(requestedStep);
+      return;
     }
 
-    startTransition(() => {
-      router.replace("/studio");
-    });
-  }, [router, searchParams]);
+    setActiveStep(initialStep);
+  }, [initialStep, loadDemoOnStart]);
+
+  useEffect(() => {
+    setIsStepDrawerOpen(false);
+  }, [activeStepState]);
+
+  useEffect(() => {
+    if (!isStepDrawerOpen || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsStepDrawerOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isStepDrawerOpen]);
 
   useEffect(() => {
     if (!composeResult) {
@@ -650,7 +902,24 @@ export function StudioClient() {
     }));
   }, [composeResult]);
 
-  const isDemoSession = isDemoTripDraft(draft);
+  const pushUploadDiagnostic = useCallback((message: string) => {
+    setUploadDiagnostics((current) => {
+      const next = [
+        ...current.slice(-7),
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          message,
+        },
+      ];
+
+      if (typeof window !== "undefined") {
+        safeSetSessionStorageItem(UPLOAD_DIAGNOSTICS_STORAGE_KEY, JSON.stringify(next));
+      }
+
+      return next;
+    });
+  }, []);
+
   const resolvedTheme = resolveTravelTheme(draft?.selectedThemeId);
   const totalUploadSize = useMemo(
     () => selectedUploads.reduce((sum, item) => sum + item.file.size, 0),
@@ -660,18 +929,122 @@ export function StudioClient() {
     () => new Map((draft?.photos ?? []).map((photo) => [photo.id, photo])),
     [draft?.photos],
   );
-  const photosNeedingManualTagging = useMemo(
-    () => draft?.photos.filter((photo) => photo.requiresManualLocationTagging) ?? [],
+  const dateEditablePhotos = useMemo(() => draft?.photos ?? [], [draft]);
+  const locationEditablePhotos = useMemo(
+    () =>
+      draft?.photos.filter(
+        (photo) =>
+          photo.requiresManualLocationTagging || !isMeaningfulLocationLabel(photo.locationLabel),
+      ) ?? [],
     [draft],
   );
+  const existingUploadSignatures = useMemo(
+    () =>
+      new Set(
+        (draft?.photos ?? []).map((photo) => getUploadSignature(photo.originalName, photo.size)),
+      ),
+    [draft],
+  );
+  const travelDateChoices = useMemo(() => {
+    if (!travelStart || !travelEnd) {
+      return [];
+    }
+
+    const start = new Date(`${travelStart}T00:00:00`);
+    const end = new Date(`${travelEnd}T00:00:00`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return [];
+    }
+
+    const days = [] as string[];
+    const cursor = new Date(start);
+
+    while (cursor <= end && days.length < 31) {
+      const year = cursor.getFullYear();
+      const month = `${cursor.getMonth() + 1}`.padStart(2, "0");
+      const day = `${cursor.getDate()}`.padStart(2, "0");
+      days.push(`${year}-${month}-${day}`);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return days;
+  }, [travelEnd, travelStart]);
+  const availableDateFilters = useMemo(() => {
+    const values = new Set(
+      (draft?.photos ?? [])
+        .map((photo) => photo.dateKey)
+        .filter((dateKey) => dateKey !== "undated"),
+    );
+    return Array.from(values).sort();
+  }, [draft]);
+  const filteredDateEditablePhotos = useMemo(() => {
+    if (reviewDateFilter === "all") {
+      return dateEditablePhotos;
+    }
+
+    if (reviewDateFilter === "undated") {
+      return dateEditablePhotos.filter((photo) => photo.dateKey === "undated");
+    }
+
+    return dateEditablePhotos.filter((photo) => photo.dateKey === reviewDateFilter);
+  }, [dateEditablePhotos, reviewDateFilter]);
+  const availableLocationFilters = useMemo(() => {
+    const values = new Set(
+      (draft?.photos ?? [])
+        .map((photo) => photo.locationLabel)
+        .filter((value): value is string => isMeaningfulLocationLabel(value)),
+    );
+    return Array.from(values).sort((left, right) => left.localeCompare(right, "ko-KR"));
+  }, [draft]);
+  const filteredLocationEditablePhotos = useMemo(() => {
+    if (reviewLocationFilter === "all") {
+      return draft?.photos ?? [];
+    }
+
+    if (reviewLocationFilter === "unresolved") {
+      return locationEditablePhotos;
+    }
+
+    return (draft?.photos ?? []).filter((photo) => photo.locationLabel === reviewLocationFilter);
+  }, [draft, locationEditablePhotos, reviewLocationFilter]);
   const suggestedLocations = useMemo(() => {
     const values = new Set(
       (draft?.photos ?? [])
         .map((photo) => photo.locationLabel)
-        .filter((value): value is string => Boolean(value)),
+        .filter((value): value is string => isMeaningfulLocationLabel(value)),
     );
     return Array.from(values).slice(0, 8);
   }, [draft]);
+
+  useEffect(() => {
+    const draftPhotoIds = new Set((draft?.photos ?? []).map((photo) => photo.id));
+
+    setSelectedPhotoIds((current) => current.filter((photoId) => draftPhotoIds.has(photoId)));
+    setSelectedDatePhotoIds((current) =>
+      current.filter((photoId) => draftPhotoIds.has(photoId)),
+    );
+  }, [draft]);
+
+  useEffect(() => {
+    if (reviewDateFilter === "all" || reviewDateFilter === "undated") {
+      return;
+    }
+
+    if (!availableDateFilters.includes(reviewDateFilter)) {
+      setReviewDateFilter("all");
+    }
+  }, [availableDateFilters, reviewDateFilter]);
+
+  useEffect(() => {
+    if (reviewLocationFilter === "all" || reviewLocationFilter === "unresolved") {
+      return;
+    }
+
+    if (!availableLocationFilters.includes(reviewLocationFilter)) {
+      setReviewLocationFilter("all");
+    }
+  }, [availableLocationFilters, reviewLocationFilter]);
   const previewDocument = useMemo(
     () => (draft ? buildPhotobookPreviewDocument(draft) : null),
     [draft],
@@ -704,56 +1077,415 @@ export function StudioClient() {
   const canOpenReview = Boolean(draft);
   const canOpenPreview = Boolean(draft?.chapters.length);
   const canOpenPublish = Boolean(draft?.photos.length);
+  const activeStep = activeStepState;
 
   function moveToStep(step: StudioStepId) {
-    flushSync(() => {
-      setActiveStep(step);
-    });
+    if (typeof document !== "undefined") {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        activeElement.blur();
+      }
+    }
+    setActiveStep(step);
 
     if (typeof window !== "undefined") {
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
+      try {
+        window.scrollTo(0, 0);
+      } catch {
+        // Ignore browsers with partial scrollTo options support.
+      }
     }
   }
+
+  const toggleReviewSelection = useCallback((kind: ReviewSelectionKind, photoId: string) => {
+    if (kind === "date") {
+      setSelectedDatePhotoIds((current) =>
+        current.includes(photoId)
+          ? current.filter((item) => item !== photoId)
+          : [...current, photoId],
+      );
+      return;
+    }
+
+    setSelectedPhotoIds((current) =>
+      current.includes(photoId)
+        ? current.filter((item) => item !== photoId)
+        : [...current, photoId],
+    );
+  }, []);
+
+  const setReviewSelectionIds = useCallback((kind: ReviewSelectionKind, photoIds: string[]) => {
+    if (kind === "date") {
+      setSelectedDatePhotoIds(photoIds);
+      return;
+    }
+
+    setSelectedPhotoIds(photoIds);
+  }, []);
+
+  const getReviewSelectionGridRef = useCallback(
+    (kind: ReviewSelectionKind) =>
+      kind === "date" ? dateSelectionGridRef.current : locationSelectionGridRef.current,
+    [],
+  );
+
+  const collectMarqueeSelectedPhotoIds = useCallback(
+    (kind: ReviewSelectionKind, box: ReviewSelectionBox) => {
+      const container = getReviewSelectionGridRef(kind);
+      if (!container) {
+        return [] as string[];
+      }
+
+      const selectionRect = {
+        left: box.left,
+        top: box.top,
+        right: box.left + box.width,
+        bottom: box.top + box.height,
+      };
+
+      return Array.from(
+        container.querySelectorAll<HTMLButtonElement>("[data-selectable-photo-id]"),
+      )
+        .filter((card) => {
+          const left = card.offsetLeft;
+          const top = card.offsetTop;
+          const right = left + card.offsetWidth;
+          const bottom = top + card.offsetHeight;
+
+          return !(
+            right < selectionRect.left ||
+            left > selectionRect.right ||
+            bottom < selectionRect.top ||
+            top > selectionRect.bottom
+          );
+        })
+        .map((card) => card.dataset.selectablePhotoId)
+        .filter((photoId): photoId is string => Boolean(photoId));
+    },
+    [getReviewSelectionGridRef],
+  );
+
+  const startReviewMarqueeSelection = useCallback(
+    (kind: ReviewSelectionKind, event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.pointerType !== "mouse" || event.button !== 0) {
+        return;
+      }
+
+      const container = getReviewSelectionGridRef(kind);
+      if (!container) {
+        return;
+      }
+
+      const startRect = container.getBoundingClientRect();
+      const startX = clampSelectionValue(
+        event.clientX - startRect.left,
+        0,
+        startRect.width,
+      );
+      const startY = clampSelectionValue(
+        event.clientY - startRect.top,
+        0,
+        startRect.height,
+      );
+      let hasMoved = false;
+      let lastClientX = event.clientX;
+      let lastClientY = event.clientY;
+
+      const updateSelectionBox = (clientX: number, clientY: number) => {
+        const currentRect = container.getBoundingClientRect();
+        const currentX = clampSelectionValue(
+          clientX - currentRect.left,
+          0,
+          currentRect.width,
+        );
+        const currentY = clampSelectionValue(
+          clientY - currentRect.top,
+          0,
+          currentRect.height,
+        );
+        const nextBox = {
+          kind,
+          left: Math.min(startX, currentX),
+          top: Math.min(startY, currentY),
+          width: Math.abs(currentX - startX),
+          height: Math.abs(currentY - startY),
+        } satisfies ReviewSelectionBox;
+
+        if (nextBox.width < 4 && nextBox.height < 4) {
+          return;
+        }
+
+        hasMoved = true;
+        setReviewSelectionBox(nextBox);
+        setReviewSelectionIds(kind, collectMarqueeSelectedPhotoIds(kind, nextBox));
+      };
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        lastClientX = moveEvent.clientX;
+        lastClientY = moveEvent.clientY;
+        updateSelectionBox(moveEvent.clientX, moveEvent.clientY);
+      };
+
+      const handleScroll = () => {
+        updateSelectionBox(lastClientX, lastClientY);
+      };
+
+      const handlePointerUp = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("scroll", handleScroll, true);
+        setReviewSelectionBox(null);
+
+        if (hasMoved) {
+          setSuppressSelectableClicksUntil(Date.now() + 250);
+        }
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener("scroll", handleScroll, true);
+    },
+    [collectMarqueeSelectedPhotoIds, getReviewSelectionGridRef, setReviewSelectionIds],
+  );
+
+  const openStepDrawer = useCallback(() => {
+    setIsStepDrawerOpen(true);
+  }, []);
+
+  const closeStepDrawer = useCallback(() => {
+    setIsStepDrawerOpen(false);
+  }, []);
+
+  const syncSnapshotFromSelections = useCallback((items: SelectedUploadFile[]) => {
+    setNativePickerSnapshot({
+      value: items.map((item) => item.displayName).join(", "),
+      fileCount: items.length,
+      fileNames: items.map((item) => item.displayName),
+      totalSize: items.reduce((sum, item) => sum + item.file.size, 0),
+    });
+  }, []);
+
+  const handleSelectFiles = useCallback(
+    (nextFiles: FileList | File[]) => {
+      const rawFiles = Array.from(nextFiles);
+      const accepted = rawFiles.filter(isAcceptedImageFile);
+      if (accepted.length === 0) {
+        setUploadError(
+          rawFiles.length > 0
+            ? "브라우저가 실제 이미지 데이터 없이 빈 파일만 전달했습니다. 다시 선택해 주세요."
+            : "선택된 파일을 읽지 못했습니다. 갤러리에서 다시 골라 주세요.",
+        );
+        pushUploadDiagnostic(`handleSelectFiles: 허용 파일 0개 / 원본 ${rawFiles.length}개`);
+        return;
+      }
+
+      const selectedAt = new Date().toISOString();
+      pushUploadDiagnostic(`handleSelectFiles: 허용 파일 ${accepted.length}개`);
+
+      const nextSelections = buildSelectedUploadItems(accepted, existingUploadSignatures);
+      setSelectedUploads(nextSelections);
+      syncSnapshotFromSelections(nextSelections);
+      setLastSelectedAt(selectedAt);
+      setUploadError(null);
+    },
+    [existingUploadSignatures, pushUploadDiagnostic, syncSnapshotFromSelections],
+  );
+
+  function openFilePicker() {
+    pushUploadDiagnostic("picker-open: 모바일 파일 선택기 열기");
+    const picker = fileInputRef.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (picker?.showPicker) {
+      picker.showPicker();
+      return;
+    }
+    picker?.click();
+  }
+
+  function runBottomAction(action?: (() => void) | null) {
+    if (!action) {
+      return;
+    }
+
+    if (typeof document !== "undefined") {
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement) {
+        activeElement.blur();
+      }
+    }
+    action();
+  }
+
+  const consumeSelectedFiles = useCallback(
+    (nextFiles: FileList | File[], source: string) => {
+      const files = Array.from(nextFiles);
+      pushUploadDiagnostic(`${source}: ${files.length}개`);
+      if (files.length === 0) {
+        return;
+      }
+      pushUploadDiagnostic(
+        `${source}-detail: ${files
+          .map((file) => `${file.name || "unnamed"}:${file.size}B`)
+          .join(", ")}`,
+      );
+      handleSelectFiles(files);
+    },
+    [handleSelectFiles, pushUploadDiagnostic],
+  );
+
+  const getFilesFromUploadForm = useCallback(() => {
+    if (!uploadFormRef.current) {
+      return [] as File[];
+    }
+
+    const entries = new FormData(uploadFormRef.current).getAll("files");
+    return entries.filter((entry): entry is File => entry instanceof File && isAcceptedImageFile(entry));
+  }, []);
+
+  const syncFilesFromInputElement = useCallback(
+    (input: HTMLInputElement | null, source: string) => {
+      if (!input) {
+        return false;
+      }
+
+      const files = Array.from(input.files ?? []);
+      if (files.length === 0) {
+        return false;
+      }
+
+      setNativePickerSnapshot({
+        value: input.value ?? "",
+        fileCount: files.length,
+        fileNames: files.map((file) => file.name || "unnamed"),
+        totalSize: files.reduce((sum, file) => sum + file.size, 0),
+      });
+      consumeSelectedFiles(files, source);
+      return true;
+    },
+    [consumeSelectedFiles],
+  );
+
+  const syncNativePickerSnapshot = useCallback(() => {
+    const input = fileInputRef.current;
+    const formFiles = getFilesFromUploadForm();
+    const files = formFiles.length > 0 ? formFiles : Array.from(input?.files ?? []);
+
+    setNativePickerSnapshot({
+      value: input?.value ?? "",
+      fileCount: files.length,
+      fileNames: files.map((file) => file.name || "unnamed"),
+      totalSize: files.reduce((sum, file) => sum + file.size, 0),
+    });
+  }, [getFilesFromUploadForm]);
+
+  useEffect(() => {
+    if (activeStep !== "upload") {
+      uploadStepLogSeededRef.current = false;
+      return;
+    }
+
+    if (!uploadStepLogSeededRef.current) {
+      pushUploadDiagnostic("upload-step-open: 업로드 단계 진입");
+      uploadStepLogSeededRef.current = true;
+    }
+    syncNativePickerSnapshot();
+  }, [activeStep, pushUploadDiagnostic, syncNativePickerSnapshot]);
+
+  useEffect(() => {
+    const input = fileInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    const handleNativeChange = () => {
+      syncFilesFromInputElement(input, "native-change");
+    };
+
+    const handleNativeInput = () => {
+      syncFilesFromInputElement(input, "native-input");
+    };
+
+    input.addEventListener("change", handleNativeChange);
+    input.addEventListener("input", handleNativeInput);
+    return () => {
+      input.removeEventListener("change", handleNativeChange);
+      input.removeEventListener("input", handleNativeInput);
+    };
+  }, [syncFilesFromInputElement]);
 
   function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
-    const nextFiles = Array.from(event.currentTarget.files ?? []);
-    event.currentTarget.value = "";
-
-    if (nextFiles.length === 0) {
+    const files = event.currentTarget.files ?? [];
+    if (files.length === 0) {
+      syncNativePickerSnapshot();
+      pushUploadDiagnostic("react-change: 0개(취소 또는 미반영)");
       return;
     }
-
-    handleSelectFiles(nextFiles);
-  }
-
-  function handleSelectFiles(nextFiles: FileList | File[]) {
-    const accepted = Array.from(nextFiles).filter(isAcceptedImageFile);
-    if (accepted.length === 0) {
-      setUploadError("선택된 파일을 읽지 못했습니다. 갤러리에서 다시 골라 주세요.");
-      return;
-    }
-
-    const selectedAt = new Date().toISOString();
-
-    setSelectedUploads(
-      accepted.map((file, index) => normalizeSelectedFile(file, index)),
-    );
-    setLastSelectedAt(selectedAt);
-    setUploadError(null);
-    moveToStep("upload");
+    setNativePickerSnapshot({
+      value: event.currentTarget.value ?? "",
+      fileCount: files.length,
+      fileNames: Array.from(files).map((file) => file.name || "unnamed"),
+      totalSize: Array.from(files).reduce((sum, file) => sum + file.size, 0),
+    });
+    consumeSelectedFiles(event.currentTarget.files ?? [], "react-change");
   }
 
   function handleClearSelectedUploads() {
     setSelectedUploads([]);
     setLastSelectedAt(null);
     setUploadError(null);
+    pushUploadDiagnostic("selection-clear: 선택 파일 비움");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setNativeFileSyncNote(null);
+    setNativePickerSnapshot({ value: "", fileCount: 0, fileNames: [], totalSize: 0 });
+    if (typeof window !== "undefined") {
+      safeRemoveSessionStorageItem(NATIVE_FILE_SYNC_NOTE_KEY);
+    }
+  }
+
+  function handleRemoveSelectedUpload(key: string) {
+    const target = selectedUploads.find((item) => item.key === key);
+    if (target?.previewUrl) {
+      URL.revokeObjectURL(target.previewUrl);
+    }
+
+    const next = selectedUploads.filter((item) => item.key !== key);
+    setSelectedUploads(next);
+    if (fileInputRef.current && next.length === 0) {
+      fileInputRef.current.value = "";
+    }
+    setNativeFileSyncNote(null);
+    syncSnapshotFromSelections(next);
+    if (typeof window !== "undefined") {
+      safeRemoveSessionStorageItem(NATIVE_FILE_SYNC_NOTE_KEY);
+    }
+    if (next.length === 0) {
+      setLastSelectedAt(null);
+    }
+    pushUploadDiagnostic(`selection-remove: ${target?.displayName ?? key}`);
   }
 
   async function handleUpload() {
     setUploadError(null);
+    let effectiveSelections = selectedUploads;
+
+    if (effectiveSelections.length === 0) {
+      const fallbackFiles = dedupeFilesByKey([
+        ...getFilesFromUploadForm(),
+        ...Array.from(fileInputRef.current?.files ?? []),
+      ].filter(isAcceptedImageFile));
+      pushUploadDiagnostic(`upload-fallback-check: input에 ${fallbackFiles.length}개`);
+
+      if (fallbackFiles.length > 0) {
+        effectiveSelections = buildSelectedUploadItems(fallbackFiles, existingUploadSignatures);
+        setSelectedUploads(effectiveSelections);
+        setLastSelectedAt(new Date().toISOString());
+        pushUploadDiagnostic(`upload-fallback-restore: DOM input에서 ${fallbackFiles.length}개 복구`);
+      }
+    }
+
+    const uploadableSelections = effectiveSelections.filter((item) => item.duplicateKind === "none");
+    const duplicateSelections = effectiveSelections.filter((item) => item.duplicateKind !== "none");
 
     if (!tripName.trim()) {
       setUploadError("여행 이름을 먼저 입력해 주세요.");
@@ -761,13 +1493,19 @@ export function StudioClient() {
       return;
     }
 
-    if (files.length === 0) {
+    if (effectiveSelections.length === 0) {
       setUploadError("사진을 한 장 이상 선택해 주세요.");
       moveToStep("upload");
       return;
     }
 
-    const emptyFiles = selectedUploads.filter((item) => item.file.size === 0);
+    if (uploadableSelections.length === 0) {
+      setUploadError("새로 추가할 사진이 없습니다. 기존과 중복되는 선택만 남아 있습니다.");
+      moveToStep("upload");
+      return;
+    }
+
+    const emptyFiles = uploadableSelections.filter((item) => item.file.size === 0);
     if (emptyFiles.length > 0) {
       setUploadError(
         "선택한 사진 중 일부가 실제 파일 데이터 없이 들어왔습니다. 갤러리에서 원본 파일로 다시 골라 주세요.",
@@ -777,14 +1515,20 @@ export function StudioClient() {
     }
 
     const formData = new FormData();
-    selectedUploads.forEach((item) =>
+    uploadableSelections.forEach((item) =>
       formData.append("files", item.file, item.displayName),
     );
     formData.append("tripName", tripName.trim());
     formData.append("travelStart", travelStart);
     formData.append("travelEnd", travelEnd);
+    if (draft) {
+      formData.append("existingDraft", JSON.stringify(draft));
+    }
 
     setIsUploading(true);
+    pushUploadDiagnostic(
+      `upload-start: 신규 ${uploadableSelections.length}개, 중복 ${duplicateSelections.length}개`,
+    );
 
     try {
       const response = await fetch("/api/trips/intake", {
@@ -804,11 +1548,27 @@ export function StudioClient() {
       setComposeResult(null);
       setOrderResult(null);
       setOrderDraft(emptyOrderDraft);
-      setReviewFeedback("사진을 읽어 자동으로 날짜와 장소 단위로 정리했습니다.");
+      setSelectedUploads([]);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      pushUploadDiagnostic(`upload-success: 서버가 ${payload.photos.length}장 draft 반환`);
+      setReviewFeedback(
+        duplicateSelections.length > 0
+          ? `${uploadableSelections.length}장을 추가하고 ${duplicateSelections.length}장은 중복 가능 사진으로 제외했습니다. 날짜와 장소 단위로 다시 정리했습니다.`
+          : `${uploadableSelections.length}장을 읽어 자동으로 날짜와 장소 단위로 정리했습니다.`,
+      );
       setSelectedPhotoIds([]);
+      setSelectedDatePhotoIds([]);
+      setManualDateLabel("");
       setManualLocationLabel("");
+      setReviewLocationFilter("all");
+      setReviewDateFilter("all");
       moveToStep("review");
     } catch (error) {
+      pushUploadDiagnostic(
+        `upload-error: ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
+      );
       setUploadError(
         error instanceof Error ? error.message : "업로드 중 알 수 없는 오류가 발생했습니다.",
       );
@@ -827,7 +1587,22 @@ export function StudioClient() {
     setOrderDraft(emptyOrderDraft);
     setSelectedUploads([]);
     setLastSelectedAt(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setNativeFileSyncNote(null);
+    setNativePickerSnapshot({ value: "", fileCount: 0, fileNames: [], totalSize: 0 });
+    if (typeof window !== "undefined") {
+      safeRemoveSessionStorageItem(NATIVE_FILE_SYNC_NOTE_KEY);
+    }
+    setSelectedDatePhotoIds([]);
+    setManualDateLabel("");
+    setSelectedPhotoIds([]);
+    setManualLocationLabel("");
+    setReviewDateFilter("all");
+    setReviewLocationFilter("all");
     setReviewFeedback("샘플 초안을 불러왔습니다. 실제 플로우를 바로 확인할 수 있습니다.");
+    pushUploadDiagnostic("demo-load: 샘플 초안 불러오기");
     moveToStep("review");
   }
 
@@ -838,6 +1613,9 @@ export function StudioClient() {
     clearCheckoutOrderResult();
     setSelectedUploads([]);
     setLastSelectedAt(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setComposeResult(null);
     setOrderResult(null);
     setOrderDraft(emptyOrderDraft);
@@ -847,6 +1625,17 @@ export function StudioClient() {
     setReviewFeedback(null);
     setComposeError(null);
     setOrderError(null);
+    setManualDateLabel("");
+    setSelectedDatePhotoIds([]);
+    setReviewDateFilter("all");
+    setReviewLocationFilter("all");
+    setUploadDiagnostics([]);
+    if (typeof window !== "undefined") {
+      safeRemoveSessionStorageItem(UPLOAD_DIAGNOSTICS_STORAGE_KEY);
+      safeRemoveSessionStorageItem(NATIVE_FILE_SYNC_NOTE_KEY);
+    }
+    setNativeFileSyncNote(null);
+    setNativePickerSnapshot({ value: "", fileCount: 0, fileNames: [], totalSize: 0 });
     setActiveStep("trip");
   }
 
@@ -866,6 +1655,42 @@ export function StudioClient() {
     setSelectedPhotoIds([]);
     setManualLocationLabel("");
     setReviewFeedback(`${normalizedLabel} 태그를 ${selectedPhotoIds.length}장에 적용했습니다.`);
+  }
+
+  function handleApplyManualDateTag() {
+    if (!draft) {
+      return;
+    }
+
+    const normalizedDate = manualDateLabel.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate) || selectedDatePhotoIds.length === 0) {
+      setReviewFeedback("날짜와 사진 선택을 먼저 확인해 주세요.");
+      return;
+    }
+
+    const nextDraft = applyManualDateTagToDraft(draft, selectedDatePhotoIds, normalizedDate);
+    saveTripDraft(nextDraft);
+    setSelectedDatePhotoIds([]);
+    setManualDateLabel("");
+    setReviewFeedback(`${normalizedDate} 날짜를 ${selectedDatePhotoIds.length}장에 적용했습니다.`);
+  }
+
+  function handleRemoveSelectedPhotos(kind: ReviewSelectionKind) {
+    if (!draft) {
+      return;
+    }
+
+    const photoIds = kind === "date" ? selectedDatePhotoIds : selectedPhotoIds;
+    if (photoIds.length === 0) {
+      setReviewFeedback("삭제할 사진을 먼저 선택해 주세요.");
+      return;
+    }
+
+    const nextDraft = removePhotosFromDraft(draft, photoIds);
+    saveTripDraft(nextDraft);
+    setSelectedDatePhotoIds([]);
+    setSelectedPhotoIds([]);
+    setReviewFeedback(`${photoIds.length}장을 포토북 초안에서 제거했습니다.`);
   }
 
   function handleThemeChange(themeId: TravelThemeId) {
@@ -993,38 +1818,26 @@ export function StudioClient() {
   const tripVisualSrc = tripVisualPhoto ? getPhotoSource(tripVisualPhoto) : null;
   const visibleUploadCards = selectedUploads.slice(0, 5);
   const hiddenUploadCount = Math.max(selectedUploads.length - visibleUploadCards.length, 0);
-
+  const existingUploadCards = (draft?.photos ?? []).slice(0, 6);
+  const nativeOnlySelectionCount =
+    selectedUploads.length === 0 ? nativePickerSnapshot.fileCount : 0;
+  const visibleNativeFileNames =
+    selectedUploads.length === 0 ? nativePickerSnapshot.fileNames.slice(0, 6) : [];
   const currentStepIndex =
     studioSteps.find((step) => step.id === activeStep)?.index ?? studioSteps[0].index;
   const currentStepPosition = studioSteps.findIndex((step) => step.id === activeStep);
   const currentStepMeta = studioSteps[currentStepPosition] ?? studioSteps[0];
   const previousStep = currentStepPosition > 0 ? studioSteps[currentStepPosition - 1] : null;
 
-  function isStepAvailable(stepId: StudioStepId) {
-    switch (stepId) {
-      case "trip":
-      case "upload":
-        return true;
-      case "review":
-        return canOpenReview;
-      case "preview":
-        return canOpenPreview;
-      case "publish":
-        return canOpenPublish;
-      default:
-        return false;
-    }
-  }
-
   function getStepPanelClass(stepId: StudioStepId) {
-    return `wizard-stage studio-card rounded-[30px] p-5 sm:p-6 ${activeStep === stepId ? "is-active" : ""}`;
+    return `wizard-stage ${activeStep === stepId ? "is-active" : ""}`;
   }
 
   const mobilePrimaryAction = (() => {
     switch (activeStep) {
       case "trip":
         return {
-          label: "사진 업로드로",
+          label: "사진 업로드하러 가기",
           onClick: () => moveToStep("upload"),
           disabled: false,
         };
@@ -1047,7 +1860,7 @@ export function StudioClient() {
 
         return {
           label: "사진 선택하기",
-          onClick: () => fileInputRef.current?.click(),
+          onClick: openFilePicker,
           disabled: false,
         };
       case "review":
@@ -1073,261 +1886,324 @@ export function StudioClient() {
     }
   })();
 
+  const bottomPrimaryAction =
+    activeStep === "publish"
+      ? composeResult
+        ? {
+            label: isOrdering ? "주문 생성 중..." : "주문 및 결제하기",
+            onClick: handleCreateOrder,
+            disabled: !composeResult || isOrdering,
+          }
+        : {
+            label: isComposing ? "테스트 책 생성 중..." : "테스트 책 생성",
+            onClick: handleComposeBook,
+            disabled: !draft || isComposing,
+          }
+      : mobilePrimaryAction;
+
+  const stepDrawerItems = studioSteps.map((step) => {
+    const disabled =
+      (step.id === "review" && !canOpenReview) ||
+      (step.id === "preview" && !canOpenPreview) ||
+      (step.id === "publish" && !canOpenPublish);
+
+    return {
+      ...step,
+      disabled,
+    };
+  });
+
+  const bottomNavigationHref =
+    activeStep === "trip"
+      ? getStudioStepHref("upload")
+      : activeStep === "upload" && draft && selectedUploads.length === 0 && canOpenReview
+        ? getStudioStepHref("review")
+        : activeStep === "review" && canOpenPreview
+          ? getStudioStepHref("preview")
+          : activeStep === "preview" && canOpenPublish
+            ? getStudioStepHref("publish")
+            : null;
+
+  const bottomNavigationLabel =
+    activeStep === "trip"
+      ? "사진 업로드하러 가기"
+      : activeStep === "upload" && draft && selectedUploads.length === 0 && canOpenReview
+        ? "이전 정리 보기"
+        : activeStep === "review"
+          ? "포토북 디자인으로"
+          : activeStep === "preview"
+            ? "Sweetbook 생성으로"
+            : null;
+
   return (
-    <div className="relative px-4 py-6 pb-36 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <header className="wizard-rail -mx-4 rounded-none border-x-0 px-4 py-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
-            <span className="text-sm font-extrabold uppercase tracking-[0.2em] text-[var(--accent)]">
-              Triplogue Studio
-            </span>
-            <div className="flex items-center gap-3">
-              <span className="hidden rounded-full bg-[var(--sand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 sm:inline-flex">
-                {draft ? (isDemoSession ? "demo session" : "live session") : "ready"}
-              </span>
-              <Link
-                href="/ops/launchpad"
-                className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:text-[var(--accent)]"
-              >
-                ops
-              </Link>
-            </div>
-          </div>
-        </header>
-
-        <section className="px-1 pt-2 sm:pt-4">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-            <div className="max-w-3xl space-y-5">
-              <span className="inline-flex rounded-full bg-[var(--sand)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
-                AI-Powered Smart Journal
-              </span>
-
-              <div className="space-y-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  STEP {String(currentStepIndex).padStart(2, "0")} / {String(studioSteps.length).padStart(2, "0")}
-                </p>
-                <h1
-                  className={`max-w-3xl font-semibold tracking-[-0.06em] text-slate-950 ${activeStep === "trip" ? "text-[clamp(2.2rem,6vw,4.8rem)]" : "text-[clamp(1.85rem,4.8vw,3.2rem)]"}`}
-                >
-                  {activeStep === "trip"
-                    ? "사진을 올리면 여행 포토북 초안이 바로 만들어집니다."
-                    : currentStepMeta.title}
-                </h1>
-                <p className="max-w-2xl text-base leading-8 text-slate-600">
-                  {activeStep === "trip"
-                    ? "촬영 시간과 위치 흐름을 읽어 날짜별·장소별로 정리하고, 포토북 초안과 주문 흐름까지 한 번에 이어줍니다."
-                    : currentStepMeta.copy}
-                </p>
-              </div>
-
-              <div className={`flex flex-wrap gap-3 ${activeStep === "trip" ? "" : "hidden sm:flex"}`}>
-                <button
-                  type="button"
-                  className="button-primary rounded-[18px] px-6 py-3.5 text-sm font-semibold text-white"
-                  onClick={() => moveToStep("upload")}
-                >
-                  {draft ? "사진 업로드 이어서 하기" : "내 사진으로 시작하기"}
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary rounded-[18px] px-6 py-3.5 text-sm font-semibold text-slate-900"
-                  onClick={handleLoadDemo}
-                >
-                  샘플 포토북 보기
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <nav className="wizard-rail mx-auto w-full max-w-5xl rounded-[24px] px-4 py-4 sm:px-5">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                Step {String(currentStepIndex).padStart(2, "0")}
-              </p>
-              <p className="mt-1 text-base font-semibold tracking-[-0.03em] text-slate-950">
-                {currentStepMeta.label}
-              </p>
-            </div>
-            <p className="text-xs font-medium text-slate-500">
-              {currentStepIndex} / {studioSteps.length}
-            </p>
-          </div>
-
-          <div className="mt-4 grid grid-cols-5 gap-2">
-            {studioSteps.map((step) => {
-              const isCurrent = step.id === activeStep;
-              const isCompleted = step.index < currentStepIndex;
-
-              return (
-                <div
-                  key={step.id}
-                  className={`h-1.5 rounded-full ${
-                    isCurrent
-                      ? "bg-[var(--accent)]"
-                      : isCompleted
-                        ? "bg-[rgba(160,62,64,0.26)]"
-                        : "bg-[var(--sand)]"
-                  }`}
-                />
-              );
-            })}
-          </div>
-
-          <div className="scroll-row mt-4 hidden gap-2 overflow-x-auto pb-1 sm:flex">
-            {studioSteps.map((step) => {
-              const isCurrent = step.id === activeStep;
-              const isCompleted = step.index < currentStepIndex;
-              const isAvailable = isStepAvailable(step.id);
-
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  className={`wizard-pill min-w-[8.4rem] rounded-[18px] px-3 py-3 text-left ${isCurrent ? "is-active" : ""} ${isCompleted ? "is-complete" : ""}`}
-                  onClick={() => {
-                    if (isAvailable) {
-                      moveToStep(step.id);
-                    }
-                  }}
-                  disabled={!isAvailable}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/5 text-[11px] font-semibold">
-                      {step.index}
-                    </span>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
-                        step
-                      </p>
-                      <p className="mt-1 text-sm font-semibold">{step.label}</p>
-                    </div>
+    <div className="min-h-screen bg-[#fbf9f4] text-[var(--foreground)]">
+      <header className="fixed top-0 z-50 h-16 w-full bg-[#fbf9f4]">
+        <div className="mx-auto flex h-full w-full max-w-screen-xl items-center justify-between px-6">
+          <button
+            type="button"
+            onClick={openStepDrawer}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#00342b] transition hover:bg-[rgba(0,52,43,0.06)] hover:opacity-80 active:scale-95"
+            aria-label="단계 메뉴 열기"
+          >
+            <span className="material-symbols-outlined">menu</span>
+          </button>
+          <div
+            className={`fixed inset-0 z-[70] transition ${
+              isStepDrawerOpen ? "pointer-events-auto" : "pointer-events-none"
+            }`}
+          >
+            <button
+              type="button"
+              aria-label="단계 메뉴 닫기"
+              className={`absolute inset-0 bg-[rgba(15,23,42,0.2)] transition duration-200 ${
+                isStepDrawerOpen ? "opacity-100" : "opacity-0"
+              }`}
+              onClick={closeStepDrawer}
+            />
+            <aside
+              className={`absolute left-0 top-0 flex h-full w-[min(22rem,84vw)] flex-col border-r border-[rgba(191,201,196,0.18)] bg-[#fbf9f4] px-5 py-5 shadow-[16px_0_40px_rgba(15,23,42,0.08)] transition duration-300 ease-out ${
+                isStepDrawerOpen ? "translate-x-0" : "-translate-x-full"
+              }`}
+            >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--accent)]">
+                      Navigation
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-slate-950">원하는 단계로 이동</p>
                   </div>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-
-        <div className="mx-auto grid w-full max-w-5xl gap-6 2xl:grid-cols-[minmax(0,1.42fr)_minmax(290px,0.78fr)]">
-          <main className="space-y-6">
-            <section className={getStepPanelClass("trip")}>
-              <div className="space-y-10">
-                <div className="space-y-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--accent)]">
-                    Step 01 / 05
-                  </p>
-                  <h2 className="max-w-3xl text-[clamp(2rem,5vw,3.6rem)] font-extrabold leading-[1.12] tracking-[-0.06em] text-slate-950">
-                    기록의 시작,
-                    <br />
-                    여행의 정보를 입력해주세요
-                  </h2>
-                  <p className="max-w-2xl text-lg leading-8 text-slate-600">
-                    당신의 소중한 순간들을 정갈하게 담아낼 첫 페이지를 작성합니다.
-                  </p>
+                  <button
+                    type="button"
+                    onClick={closeStepDrawer}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-[rgba(0,52,43,0.06)] hover:text-[var(--accent)]"
+                    aria-label="단계 메뉴 닫기"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
                 </div>
 
-                <div className="grid gap-8 xl:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)] xl:items-start">
-                  <form className="space-y-8">
-                    <label className="space-y-2">
-                      <span className="block px-1 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
-                        여행 제목
-                      </span>
-                      <input
-                        value={tripName}
-                        onChange={(event) => setTripName(event.target.value)}
-                        className="w-full rounded-[24px] border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-lg text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.2)]"
-                        placeholder="예: 파리에서의 열흘간의 기록"
-                      />
-                    </label>
-
-                    <div className="grid gap-6 md:grid-cols-2">
-                      <label className="space-y-2">
-                        <span className="block px-1 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
-                          시작일
+                <div className="mt-6 space-y-3">
+                  {stepDrawerItems.map((step) =>
+                    step.disabled ? (
+                      <div
+                        key={step.id}
+                        className="flex w-full items-center gap-3 rounded-[20px] border border-[rgba(191,201,196,0.16)] bg-white px-4 py-4 text-left opacity-50"
+                      >
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--sand)] text-sm font-bold text-slate-700">
+                          {step.index}
                         </span>
-                        <div className="relative">
-                          <input
-                            type="date"
-                            value={travelStart}
-                            onChange={(event) => setTravelStart(event.target.value)}
-                            className="w-full rounded-[24px] border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-base text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.2)]"
-                          />
-                          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                            date
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-900">{step.label}</span>
+                          <span className="mt-1 block text-xs text-slate-500">
+                            이전 단계를 마친 뒤 열립니다.
                           </span>
-                        </div>
-                      </label>
-
-                      <label className="space-y-2">
-                        <span className="block px-1 text-sm font-bold uppercase tracking-[0.18em] text-slate-500">
-                          종료일
                         </span>
-                        <div className="relative">
-                          <input
-                            type="date"
-                            value={travelEnd}
-                            onChange={(event) => setTravelEnd(event.target.value)}
-                            className="w-full rounded-[24px] border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-base text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.2)]"
-                          />
-                          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                            date
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="button-primary inline-flex items-center gap-2 rounded-[18px] px-6 py-3.5 text-sm font-semibold text-white"
-                      onClick={() => moveToStep("upload")}
-                    >
-                      사진 업로드하러 가기
-                      <span aria-hidden="true">→</span>
-                    </button>
-                  </form>
-
-                  <div className="space-y-5">
-                    <div className="group relative overflow-hidden rounded-[28px] border border-[rgba(191,201,196,0.16)] bg-[var(--surface-container-low,rgba(245,243,238,0.96))] p-1">
-                      <div className="relative aspect-[16/11] overflow-hidden rounded-[22px]">
-                        {tripVisualSrc ? (
-                          <Image
-                            src={tripVisualSrc}
-                            alt={tripVisualPhoto?.originalName ?? "trip visual"}
-                            fill
-                            unoptimized
-                            className="object-cover transition-transform duration-700 group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="h-full w-full bg-[linear-gradient(145deg,_rgba(15,118,110,0.22),_rgba(255,255,255,0.9))]" />
-                        )}
-                        <div className="absolute inset-0 bg-[linear-gradient(180deg,transparent,rgba(0,52,43,0.48))]" />
-                        <div className="absolute inset-x-0 bottom-0 p-6 text-white">
-                          <span className="text-xs font-bold uppercase tracking-[0.22em] text-white/78">
-                            Journal Tip
-                          </span>
-                          <p className="mt-2 text-sm font-medium leading-6 text-white/88">
-                            정확한 날짜는 나중에 타임라인을 자동 생성하는 데 도움을 줍니다.
-                          </p>
-                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <button
+                        key={step.id}
+                        type="button"
+                        onClick={() => {
+                          moveToStep(step.id);
+                          closeStepDrawer();
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-[20px] border px-4 py-4 text-left transition ${
+                          step.id === activeStep
+                            ? "border-[rgba(0,52,43,0.18)] bg-[rgba(0,52,43,0.06)]"
+                            : "border-[rgba(191,201,196,0.16)] bg-white hover:border-[rgba(0,52,43,0.16)]"
+                        }`}
+                      >
+                        <span
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                            step.id === activeStep
+                              ? "bg-[var(--accent)] text-white"
+                              : "bg-[var(--sand)] text-slate-700"
+                          }`}
+                        >
+                          {step.index}
+                        </span>
+                        <span>
+                          <span className="block text-sm font-semibold text-slate-900">{step.label}</span>
+                          <span className="mt-1 block text-xs text-slate-500">{step.copy}</span>
+                        </span>
+                      </button>
+                    ),
+                  )}
+                </div>
 
-                    <div className="rounded-[24px] border border-[rgba(15,118,110,0.18)] bg-[linear-gradient(180deg,_rgba(15,118,110,0.08),_rgba(255,255,255,0.94))] px-5 py-5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                        Galaxy Tip
-                      </p>
-                      <p className="mt-3 text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                        위치 태그가 포함된 사진은 더 정확한 챕터를 만듭니다.
-                      </p>
-                      <p className="mt-3 text-sm leading-6 text-slate-600">
-                        GPS가 없는 사진도 괜찮습니다. 업로드 후 몇 장만 직접 태그해주면 같은 시간대와 장소 흐름을 다시 묶어줍니다.
+                <div className="mt-auto rounded-[22px] bg-white px-4 py-4 text-sm leading-6 text-slate-600">
+                  상단 <span className="font-semibold text-[var(--accent)]">Triplogue Studio</span> 타이틀은
+                  랜딩 홈으로 돌아가는 버튼입니다.
+                </div>
+            </aside>
+          </div>
+          <Link
+            href="/"
+            className="font-['Manrope'] text-lg font-bold tracking-tight text-[var(--accent)] transition-opacity hover:opacity-80"
+          >
+            Triplogue Studio
+          </Link>
+          <Link
+            href="/ops/launchpad"
+            className="text-[#00342b] transition-opacity duration-150 hover:opacity-80 active:scale-95"
+            aria-label="운영 화면"
+          >
+            <span className="material-symbols-outlined">help_outline</span>
+          </Link>
+        </div>
+      </header>
+
+      <main
+        className={`mx-auto min-h-screen w-full px-6 pb-32 pt-24 ${
+          activeStep === "trip" ? "max-w-screen-md" : "max-w-screen-xl"
+        }`}
+      >
+        {activeStep !== "trip" ? (
+        <div className="mx-auto mb-12 w-full max-w-screen-md">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase tracking-[0.24em] text-[var(--accent)]">
+              Step {String(currentStepIndex).padStart(2, "0")} / {String(studioSteps.length).padStart(2, "0")}
+            </span>
+            <span className="text-xs font-medium text-slate-500">{currentStepMeta.label}</span>
+          </div>
+          <div className="flex h-1 w-full gap-2 rounded-full bg-[rgba(228,226,221,0.76)]">
+            {studioSteps.map((step) => (
+              <div
+                key={step.id}
+                className={`h-full w-1/5 rounded-full ${
+                  step.id === activeStep
+                    ? "bg-[var(--accent)]"
+                    : step.index < currentStepIndex
+                      ? "bg-[rgba(0,52,43,0.2)]"
+                      : "bg-[rgba(228,226,221,1)]"
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+        ) : null}
+
+        <div className="mx-auto w-full">
+            <section className={getStepPanelClass("trip")}>
+              <div className="mb-12">
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-widest text-[var(--accent)]">
+                    Step 01 / 05
+                  </span>
+                  <span className="text-xs text-slate-500">여행 개요</span>
+                </div>
+                <div className="flex h-1 w-full gap-1 overflow-hidden rounded-full bg-[rgba(234,232,227,0.88)]">
+                  <div className="h-full w-1/5 rounded-full bg-[var(--accent)]" />
+                  <div className="h-full w-1/5 rounded-full bg-[rgba(228,226,221,1)]" />
+                  <div className="h-full w-1/5 rounded-full bg-[rgba(228,226,221,1)]" />
+                  <div className="h-full w-1/5 rounded-full bg-[rgba(228,226,221,1)]" />
+                  <div className="h-full w-1/5 rounded-full bg-[rgba(228,226,221,1)]" />
+                </div>
+              </div>
+
+              <div className="mb-12">
+                <h2 className="mb-4 font-['Manrope'] text-3xl font-extrabold leading-tight text-slate-950 md:text-4xl">
+                  기록의 시작,
+                  <br />
+                  여행의 정보를 입력해주세요
+                </h2>
+                <p className="text-lg leading-relaxed text-slate-600">
+                  당신의 소중한 순간들을 정갈하게 담아낼 첫 페이지를 작성합니다.
+                </p>
+              </div>
+
+              <form className="space-y-8">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="travel-title"
+                    className="px-1 text-sm font-bold uppercase tracking-wider text-slate-500"
+                  >
+                    여행 제목
+                  </label>
+                  <input
+                    id="travel-title"
+                    value={tripName}
+                    onChange={(event) => setTripName(event.target.value)}
+                    className="w-full rounded-xl border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-lg text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.18)]"
+                    placeholder="예: 파리에서의 열흘간의 기록"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="start-date"
+                      className="px-1 text-sm font-bold uppercase tracking-wider text-slate-500"
+                    >
+                      시작일
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="start-date"
+                        type="date"
+                        value={travelStart}
+                        onChange={(event) => setTravelStart(event.target.value)}
+                        className="w-full rounded-xl border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.18)]"
+                      />
+                      <span className="material-symbols-outlined pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">
+                        calendar_today
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="end-date"
+                      className="px-1 text-sm font-bold uppercase tracking-wider text-slate-500"
+                    >
+                      종료일
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="end-date"
+                        type="date"
+                        value={travelEnd}
+                        onChange={(event) => setTravelEnd(event.target.value)}
+                        className="w-full rounded-xl border-none bg-[rgba(234,232,227,0.9)] px-5 py-4 text-slate-950 outline-none transition focus:ring-1 focus:ring-[rgba(0,52,43,0.18)]"
+                      />
+                      <span className="material-symbols-outlined pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-500">
+                        calendar_today
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="group relative mt-12 aspect-[16/9] cursor-pointer overflow-hidden rounded-2xl border border-[rgba(191,201,196,0.14)] bg-[rgba(245,243,238,0.96)] p-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt="Scenic landscape"
+                    src={tripVisualSrc ?? stitchStepOneVisual}
+                    className="h-full w-full rounded-xl object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-1 rounded-xl bg-gradient-to-t from-[rgba(0,52,43,0.42)] to-transparent">
+                    <div className="absolute inset-x-0 bottom-0 p-6 text-white">
+                      <span className="mb-1 block text-xs font-bold uppercase tracking-widest text-white/80">
+                        Journal Tip
+                      </span>
+                      <p className="font-medium">
+                        정확한 날짜는 나중에 타임라인을 자동 생성하는 데 도움을 줍니다.
                       </p>
                     </div>
                   </div>
                 </div>
-              </div>
+
+                <div className="md:hidden">
+                  <Link
+                    href={getStudioStepHref("upload")}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#00342b] px-8 py-4 text-[14px] font-bold leading-none !text-white visited:!text-white hover:bg-[#004d40] hover:!text-white active:scale-[0.98] active:!text-white"
+                  >
+                    사진 업로드하러 가기
+                    <span className="material-symbols-outlined text-[18px] leading-none">
+                      arrow_forward
+                    </span>
+                  </Link>
+                </div>
+              </form>
             </section>
 
             <section className={getStepPanelClass("upload")}>
@@ -1346,36 +2222,52 @@ export function StudioClient() {
                   </p>
                 </div>
 
-                <div className="space-y-6">
-                  <label htmlFor="studio-photo-picker" className="relative block cursor-pointer group">
-                    <div className="flex aspect-[16/9] min-h-[14rem] w-full flex-col items-center justify-center rounded-[24px] border-2 border-dashed border-[rgba(191,201,196,0.32)] bg-[rgba(245,243,238,0.88)] px-6 text-center transition-all hover:border-[rgba(0,52,43,0.38)] group-active:scale-[0.99]">
-                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-white">
-                        <span className="text-3xl">+</span>
+                <form
+                  ref={uploadFormRef}
+                  className="space-y-6"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleUpload();
+                  }}
+                >
+                  <div className="space-y-6">
+                    <div className="relative group">
+                      <div className="w-full aspect-[16/9] rounded-xl border-2 border-dashed border-[rgba(191,201,196,0.3)] bg-[var(--surface-container-low,rgba(245,243,238,0.88))] md:aspect-[21/9]">
+                        <div className="flex h-full flex-col items-center justify-center px-6 text-center transition-all group-hover:border-[rgba(0,52,43,0.4)] group-active:scale-[0.99]">
+                          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-white">
+                            <span className="material-symbols-outlined text-3xl">add_a_photo</span>
+                          </div>
+                          <span className="font-bold text-[var(--accent)]">사진 선택하기</span>
+                          <span className="mt-1 text-xs text-slate-500">
+                            JPG, PNG, HEIC up to 20MB each
+                          </span>
+                        </div>
                       </div>
-                      <span className="font-bold text-[var(--accent)]">사진 선택하기</span>
-                      <span className="mt-1 text-xs text-slate-500">
-                        JPG, PNG, HEIC, HEIF, WebP
-                      </span>
+                      <input
+                        ref={fileInputRef}
+                        id="studio-photo-picker"
+                        name="files"
+                        type="file"
+                        accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                        multiple
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                        onClick={() => {
+                          pushUploadDiagnostic("picker-open: 네이티브 파일 입력 열기");
+                        }}
+                        onChange={handleFileInputChange}
+                      />
                     </div>
-                  </label>
-                  <input
-                    ref={fileInputRef}
-                    id="studio-photo-picker"
-                    type="file"
-                    accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif"
-                    multiple
-                    className="sr-only"
-                    onChange={handleFileInputChange}
-                  />
 
                   <div className="rounded-[24px] bg-white px-6 py-6 shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
                     <div className="flex flex-wrap items-end justify-between gap-4">
                       <div>
                         <h3 className="text-sm font-bold text-slate-950">
-                          선택한 사진 {selectedUploads.length}장
+                          선택한 사진 {selectedUploads.length || nativeOnlySelectionCount}장
                         </h3>
                         <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                          Total Size: {formatBytes(totalUploadSize)}
+                          Total Size: {formatBytes(
+                            selectedUploads.length > 0 ? totalUploadSize : nativePickerSnapshot.totalSize,
+                          )}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1383,15 +2275,14 @@ export function StudioClient() {
                           type="button"
                           className="text-xs font-bold text-[var(--accent-secondary)] transition hover:underline"
                           onClick={handleClearSelectedUploads}
-                          disabled={selectedUploads.length === 0}
+                          disabled={selectedUploads.length === 0 && nativeOnlySelectionCount === 0}
                         >
                           모두 삭제
                         </button>
                         <button
-                          type="button"
+                          type="submit"
                           className="button-primary rounded-[18px] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={handleUpload}
-                          disabled={isUploading || selectedUploads.length === 0}
+                          disabled={isUploading}
                         >
                           {isUploading ? "사진 정리 중..." : "사진 정리 시작하기"}
                         </button>
@@ -1404,20 +2295,34 @@ export function StudioClient() {
                           {visibleUploadCards.map((item) => (
                             <div
                               key={item.key}
-                              className="group relative aspect-square overflow-hidden rounded-[18px] bg-[var(--sand)]"
+                              className="group relative aspect-square overflow-hidden rounded-lg bg-[var(--surface-container,rgba(240,238,233,0.96))]"
                             >
-                              <Image
-                                src={item.previewUrl}
-                                alt={item.displayName}
-                                width={160}
-                                height={160}
-                                unoptimized
-                                className="h-full w-full object-cover"
-                              />
+                              <button
+                                type="button"
+                                aria-label={`${item.displayName} 제거`}
+                                className="absolute inset-0 z-10 flex items-center justify-center bg-[rgba(0,52,43,0.2)] opacity-0 transition-opacity group-hover:opacity-100"
+                                onClick={() => handleRemoveSelectedUpload(item.key)}
+                              >
+                                <span className="material-symbols-outlined text-sm text-white">close</span>
+                              </button>
+                              {item.previewUrl ? (
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={item.previewUrl}
+                                    alt={item.displayName}
+                                    className="h-full w-full object-cover"
+                                  />
+                                </>
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center px-3 text-center text-[11px] font-semibold leading-5 text-slate-500">
+                                  미리보기를 지원하지 않는 형식
+                                </div>
+                              )}
                             </div>
                           ))}
                           {hiddenUploadCount > 0 ? (
-                            <div className="flex aspect-square items-center justify-center rounded-[18px] bg-[rgba(228,226,221,0.92)] text-sm font-bold text-slate-600">
+                            <div className="flex aspect-square items-center justify-center rounded-lg bg-[rgba(228,226,221,0.92)] text-sm font-bold text-slate-600">
                               +{hiddenUploadCount}
                             </div>
                           ) : null}
@@ -1448,22 +2353,89 @@ export function StudioClient() {
                               <span className="min-w-0 truncate">
                                 {index + 1}. {item.displayName}
                               </span>
-                              <span className="shrink-0 text-xs text-slate-500">
-                                {formatBytes(item.file.size)}
-                              </span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                {item.duplicateKind !== "none" ? (
+                                  <span className="rounded-full bg-[rgba(160,62,64,0.12)] px-2 py-1 text-[10px] font-bold text-[var(--accent-secondary)]">
+                                    {item.duplicateKind === "existing" ? "중복 가능" : "선택 중복"}
+                                  </span>
+                                ) : null}
+                                <span className="text-xs text-slate-500">
+                                  {formatBytes(item.file.size)}
+                                </span>
+                              </div>
                             </div>
                           ))}
                         </div>
                       </>
-                    ) : (
+                    ) : nativeOnlySelectionCount > 0 ? (
+                      <div className="mt-6 space-y-4">
+                        <div className="rounded-[18px] bg-[rgba(0,52,43,0.05)] px-4 py-4 text-sm leading-6 text-slate-700">
+                          브라우저 입력창에는 {nativeOnlySelectionCount}장이 잡혀 있습니다. 현재 미리보기 상태 동기화가 늦어질 수 있지만, 아래 버튼으로 그대로 정리를 시도할 수 있습니다.
+                        </div>
+                        <div className="grid gap-2">
+                          {visibleNativeFileNames.map((fileName, index) => (
+                            <div
+                              key={`native-name-${fileName}-${index}`}
+                              className="flex items-center justify-between gap-3 rounded-[18px] bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                            >
+                              <span className="min-w-0 truncate">
+                                {index + 1}. {fileName}
+                              </span>
+                              <span className="rounded-full bg-[rgba(0,52,43,0.08)] px-2 py-1 text-[10px] font-bold text-[var(--accent)]">
+                                DOM input
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                  ) : (
                       <div className="mt-6 rounded-[18px] bg-[rgba(245,243,238,0.72)] px-4 py-4 text-sm leading-6 text-slate-500">
-                        아직 선택된 사진이 없습니다. 위 카드에서 사진을 고르면 이곳에 썸네일과 파일 목록이 바로 나타납니다.
+                        아직 새로 추가할 사진이 없습니다. 위 카드에서 사진을 고르면 이곳에 썸네일과 파일 목록이 바로 나타납니다.
                       </div>
                     )}
                   </div>
+                  </div>
+
+                  {draft ? (
+                    <div className="rounded-[24px] bg-white px-6 py-6 shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
+                      <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-950">
+                            이미 정리된 사진 {draft.photos.length}장
+                          </h3>
+                          <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+                            기존 draft에 포함된 사진
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-full border border-[var(--line)] bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400"
+                          onClick={() => moveToStep("review")}
+                        >
+                          현재 정리 상태 보기
+                        </button>
+                      </div>
+
+                      <div className="mt-6 grid grid-cols-3 gap-3 md:grid-cols-6">
+                        {existingUploadCards.map((photo) => (
+                          <PhotoSurface
+                            key={photo.id}
+                            photo={photo}
+                            showOverlay={false}
+                            className="min-h-[6rem] rounded-[18px]"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="flex items-start gap-3 px-2">
-                    <span className="text-lg font-semibold text-[var(--accent-secondary)]">i</span>
+                    <span
+                      className="material-symbols-outlined text-[var(--accent-secondary)] text-lg"
+                      style={{ fontVariationSettings: "'FILL' 1" }}
+                    >
+                      info
+                    </span>
                     <p className="text-xs leading-6 text-slate-500">
                       위치 태그가 포함된 사진은 더 정확하게 정리됩니다. 개인정보 보호를 위해 위치 정보는 정리 후 즉시 암호화됩니다.
                     </p>
@@ -1477,9 +2449,6 @@ export function StudioClient() {
                     >
                       샘플 초안으로 바로 보기
                     </button>
-                    <span className="rounded-full bg-[rgba(15,118,110,0.08)] px-4 py-3 text-sm font-semibold text-[var(--accent)]">
-                      최근 선택 {formatSelectionTimestamp(lastSelectedAt)}
-                    </span>
                   </div>
 
                   {uploadError ? (
@@ -1501,42 +2470,7 @@ export function StudioClient() {
                       </div>
                     </div>
                   ) : null}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-[24px] border border-[var(--line)] bg-white px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      선택한 사진
-                    </p>
-                    <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
-                      {selectedUploads.length}장
-                    </p>
-                  </div>
-                  <div className="rounded-[24px] border border-[var(--line)] bg-white px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      총 용량
-                    </p>
-                    <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
-                      {formatBytes(totalUploadSize)}
-                    </p>
-                  </div>
-                  <div className="rounded-[24px] border border-[var(--line)] bg-white px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                      현재 테마
-                    </p>
-                    <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-slate-950">
-                      {resolvedTheme.name}
-                    </p>
-                  </div>
-                  <div className="rounded-[24px] border border-[var(--line)] bg-[rgba(15,118,110,0.06)] px-5 py-4 sm:col-span-3 xl:col-span-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                      샘플 데모도 가능
-                    </p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">
-                      {demoTripQuickFacts.primaryNote}
-                    </p>
-                  </div>
-                </div>
+                </form>
               </div>
             </section>
 
@@ -1603,6 +2537,146 @@ export function StudioClient() {
                       );
                     })}
 
+                    <section className="rounded-[28px] border border-[rgba(191,201,196,0.12)] bg-white px-6 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[rgba(0,52,43,0.08)] text-[var(--accent)]">
+                          <span className="text-xl">#</span>
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
+                            날짜 라벨 수정
+                          </h3>
+                          <p className="text-sm text-slate-500">
+                            포토북엔 실제 날짜가 더 자연스럽습니다. 필요한 사진을 골라 날짜를 직접 수정할 수 있습니다.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                        <div className="space-y-4">
+                          <label className="grid gap-2">
+                            <span className="text-sm font-semibold text-slate-900">날짜 선택</span>
+                            <input
+                              type="date"
+                              value={manualDateLabel}
+                              onChange={(event) => setManualDateLabel(event.target.value)}
+                              className="rounded-[18px] border border-[var(--line)] bg-[var(--sand)] px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
+                            />
+                          </label>
+
+                          {travelDateChoices.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {travelDateChoices.map((dateKey) => (
+                                <button
+                                  key={dateKey}
+                                  type="button"
+                                  className="rounded-full bg-[var(--sand)] px-3 py-2 text-xs font-semibold text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-[rgba(0,52,43,0.08)] hover:text-[var(--accent)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
+                                  onClick={() => setManualDateLabel(dateKey)}
+                                >
+                                  {formatDateKeyBadge(dateKey)}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap gap-3 lg:justify-end lg:self-end">
+                          <button
+                            type="button"
+                            className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
+                            onClick={() =>
+                              setSelectedDatePhotoIds(
+                                dateEditablePhotos.map((photo) => photo.id),
+                              )
+                            }
+                          >
+                            전체 선택
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-[18px] border border-[rgba(160,62,64,0.18)] bg-white px-5 py-3 text-sm font-semibold text-[var(--accent-secondary)] transition hover:bg-[rgba(160,62,64,0.06)]"
+                            onClick={() => handleRemoveSelectedPhotos("date")}
+                          >
+                            선택 사진 삭제
+                          </button>
+                          <button
+                            type="button"
+                            className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white"
+                            onClick={handleApplyManualDateTag}
+                          >
+                            선택 사진 날짜 수정
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        {[
+                          { value: "all", label: "전체" },
+                          { value: "undated", label: "미지정" },
+                          ...availableDateFilters.map((dateKey) => ({
+                            value: dateKey,
+                            label: formatDateKeyBadge(dateKey),
+                          })),
+                        ].map((item) => {
+                          const isActive = reviewDateFilter === item.value;
+                          return (
+                            <button
+                              key={`filter-${item.value}`}
+                              type="button"
+                              className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                                isActive
+                                  ? "bg-[var(--accent)] text-white"
+                                  : "bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-[rgba(0,52,43,0.06)] hover:text-[var(--accent)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
+                              }`}
+                              onClick={() => setReviewDateFilter(item.value)}
+                            >
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div
+                        ref={dateSelectionGridRef}
+                        className="relative mt-5 grid select-none grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5"
+                        onPointerDown={(event) => startReviewMarqueeSelection("date", event)}
+                      >
+                        {filteredDateEditablePhotos.length > 0 ? (
+                          filteredDateEditablePhotos.map((photo) => {
+                            const isSelected = selectedDatePhotoIds.includes(photo.id);
+
+                            return (
+                              <SelectablePhotoCard
+                                key={`date-${photo.id}`}
+                                photo={photo}
+                                selected={isSelected}
+                                onToggle={() => toggleReviewSelection("date", photo.id)}
+                                suppressClicksUntil={suppressSelectableClicksUntil}
+                                badge={formatDateKeyBadge(photo.dateKey)}
+                                helper={`현재 날짜: ${photo.dateKey === "undated" ? "미정" : photo.dateKey}`}
+                              />
+                            );
+                          })
+                        ) : (
+                          <div className="col-span-full rounded-[20px] bg-[var(--sand)] px-4 py-4 text-sm leading-6 text-slate-600">
+                            선택한 필터에 해당하는 사진이 없습니다.
+                          </div>
+                        )}
+                        {reviewSelectionBox?.kind === "date" ? (
+                          <div
+                            className="pointer-events-none absolute rounded-[18px] border border-[rgba(0,52,43,0.28)] bg-[rgba(0,52,43,0.08)]"
+                            style={{
+                              left: reviewSelectionBox.left,
+                              top: reviewSelectionBox.top,
+                              width: reviewSelectionBox.width,
+                              height: reviewSelectionBox.height,
+                            }}
+                          />
+                        ) : null}
+                      </div>
+
+                    </section>
+
                     <section className="rounded-[28px] border border-[rgba(191,201,196,0.12)] bg-[var(--sand)] px-6 py-6">
                       <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[rgba(160,62,64,0.12)] text-[var(--accent-secondary)]">
@@ -1610,105 +2684,139 @@ export function StudioClient() {
                         </div>
                         <div>
                           <h3 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
-                            위치 정보 없음
+                            위치 라벨 수정
                           </h3>
                           <p className="text-sm text-slate-500">
-                            일부 사진은 직접 장소를 붙여줘야 합니다.
+                            위치가 비어 있거나 임시 스팟으로 남은 사진을 골라 실제 장소 이름으로 바꿀 수 있습니다.
                           </p>
                         </div>
                       </div>
 
-                      <label className="mt-6 grid gap-2">
-                        <span className="text-sm font-semibold text-slate-900">장소 이름</span>
-                        <input
-                          value={manualLocationLabel}
-                          onChange={(event) => setManualLocationLabel(event.target.value)}
-                          className="rounded-[18px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
-                          placeholder="예: 아사쿠사 센소지"
-                        />
-                      </label>
+                      <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_auto] lg:items-end">
+                        <div className="space-y-4">
+                          <label className="grid gap-2">
+                            <span className="text-sm font-semibold text-slate-900">장소 이름</span>
+                            <input
+                              value={manualLocationLabel}
+                              onChange={(event) => setManualLocationLabel(event.target.value)}
+                              className="rounded-[18px] border border-[var(--line)] bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--accent)]"
+                              placeholder="예: 아사쿠사 센소지"
+                            />
+                          </label>
 
-                      {suggestedLocations.length > 0 ? (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {suggestedLocations.map((label) => (
-                            <button
-                              key={label}
-                              type="button"
-                              className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:text-[var(--accent)]"
-                              onClick={() => setManualLocationLabel(label)}
-                            >
-                              {label}
-                            </button>
-                          ))}
+                          {suggestedLocations.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {suggestedLocations.map((label) => (
+                                <button
+                                  key={label}
+                                  type="button"
+                                  className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:text-[var(--accent)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
+                                  onClick={() => setManualLocationLabel(label)}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
 
-                      <div className="mt-5 space-y-3">
-                        {photosNeedingManualTagging.length > 0 ? (
-                          photosNeedingManualTagging.map((photo) => {
+                        <div className="flex flex-wrap gap-3 lg:justify-end lg:self-end">
+                          <button
+                            type="button"
+                            className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
+                            onClick={() =>
+                              setSelectedPhotoIds(
+                                filteredLocationEditablePhotos.map((photo) => photo.id),
+                              )
+                            }
+                          >
+                            전체 선택
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-[18px] border border-[rgba(160,62,64,0.18)] bg-white px-5 py-3 text-sm font-semibold text-[var(--accent-secondary)] transition hover:bg-[rgba(160,62,64,0.06)]"
+                            onClick={() => handleRemoveSelectedPhotos("location")}
+                          >
+                            선택 사진 삭제
+                          </button>
+                          <button
+                            type="button"
+                            className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white"
+                            onClick={handleApplyManualTag}
+                          >
+                            선택 사진 위치 저장
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        {[
+                          { value: "all", label: "전체" },
+                          { value: "unresolved", label: "미지정" },
+                          ...availableLocationFilters.map((label) => ({
+                            value: label,
+                            label,
+                          })),
+                        ].map((item) => {
+                          const isActive = reviewLocationFilter === item.value;
+                          return (
+                            <button
+                              key={`location-filter-${item.value}`}
+                              type="button"
+                              className={`rounded-full px-3 py-2 text-xs font-semibold transition ${
+                                isActive
+                                  ? "bg-[var(--accent)] text-white"
+                                  : "bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-[rgba(0,52,43,0.06)] hover:text-[var(--accent)] hover:shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
+                              }`}
+                              onClick={() => setReviewLocationFilter(item.value)}
+                            >
+                              {item.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div
+                        ref={locationSelectionGridRef}
+                        className="relative mt-5 grid select-none grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5"
+                        onPointerDown={(event) => startReviewMarqueeSelection("location", event)}
+                      >
+                        {filteredLocationEditablePhotos.length > 0 ? (
+                          filteredLocationEditablePhotos.map((photo) => {
                             const isSelected = selectedPhotoIds.includes(photo.id);
 
                             return (
-                              <label
+                              <SelectablePhotoCard
                                 key={photo.id}
-                                className={`flex cursor-pointer items-center justify-between gap-4 rounded-[20px] bg-white px-4 py-4 transition ${
-                                  isSelected ? "ring-1 ring-[rgba(0,52,43,0.22)]" : ""
-                                }`}
-                              >
-                                <div className="flex min-w-0 items-center gap-4">
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4"
-                                    checked={isSelected}
-                                    onChange={() =>
-                                      setSelectedPhotoIds((current) =>
-                                        current.includes(photo.id)
-                                          ? current.filter((item) => item !== photo.id)
-                                          : [...current, photo.id],
-                                      )
-                                    }
-                                  />
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium text-slate-950">
-                                      {photo.originalName}
-                                    </p>
-                                    <p className="mt-1 text-xs text-slate-500">
-                                      {formatDateLabel(photo.capturedAt)}
-                                    </p>
-                                  </div>
-                                </div>
-                                <span className="text-xs font-medium text-slate-500">
-                                  위치 추가
-                                </span>
-                              </label>
+                                photo={photo}
+                                selected={isSelected}
+                                onToggle={() => toggleReviewSelection("location", photo.id)}
+                                suppressClicksUntil={suppressSelectableClicksUntil}
+                                badge={photo.locationLabel && isMeaningfulLocationLabel(photo.locationLabel) ? photo.locationLabel : "위치 추가"}
+                                helper={
+                                  photo.dateKey === "undated"
+                                    ? "날짜 미정"
+                                    : `${formatDateKeyBadge(photo.dateKey)} · ${formatDateLabel(photo.capturedAt)}`
+                                }
+                              />
                             );
                           })
                         ) : (
-                          <div className="rounded-[20px] bg-white px-4 py-4 text-sm leading-6 text-slate-600">
-                            위치가 비는 사진이 없습니다. 바로 포토북 포맷 선택으로 넘어가면 됩니다.
+                          <div className="col-span-full rounded-[20px] bg-white px-4 py-4 text-sm leading-6 text-slate-600">
+                            선택한 위치 필터에 해당하는 사진이 없습니다.
                           </div>
                         )}
-                      </div>
-
-                      <div className="mt-5 flex flex-wrap gap-3">
-                        <button
-                          type="button"
-                          className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white"
-                          onClick={handleApplyManualTag}
-                        >
-                          선택 사진에 태그 적용
-                        </button>
-                        <button
-                          type="button"
-                          className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
-                          onClick={() =>
-                            setSelectedPhotoIds(
-                              photosNeedingManualTagging.map((photo) => photo.id),
-                            )
-                          }
-                        >
-                          전체 선택
-                        </button>
+                        {reviewSelectionBox?.kind === "location" ? (
+                          <div
+                            className="pointer-events-none absolute rounded-[18px] border border-[rgba(0,52,43,0.28)] bg-[rgba(0,52,43,0.08)]"
+                            style={{
+                              left: reviewSelectionBox.left,
+                              top: reviewSelectionBox.top,
+                              width: reviewSelectionBox.width,
+                              height: reviewSelectionBox.height,
+                            }}
+                          />
+                        ) : null}
                       </div>
 
                       {reviewFeedback ? (
@@ -2185,136 +3293,48 @@ export function StudioClient() {
                 </div>
               </div>
             </section>
-          </main>
-
-          <aside className="hidden space-y-6 2xl:block">
-            <div className="studio-card rounded-[32px] p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                지금 상태
-              </p>
-              <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                {draft ? draft.tripName : "아직 여행 초안이 없습니다"}
-              </p>
-              <p className="mt-3 text-sm leading-6 text-slate-600">
-                {draft
-                  ? `${draft.stats.totalPhotos}장 중 ${draft.stats.withResolvedLocation}장이 자동 정리됐고 ${draft.stats.manualTaggingRequired}장은 보정 대기 중입니다.`
-                  : "여행 설정과 사진 업로드를 마치면 자동 그룹핑 상태가 이 영역에 요약됩니다."}
-              </p>
-            </div>
-
-            <div className="studio-card rounded-[32px] p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                빠른 이동
-              </p>
-              <div className="mt-4 grid gap-3">
-                <button
-                  type="button"
-                  className="button-secondary rounded-full px-4 py-3 text-left text-sm font-semibold text-slate-900"
-                  onClick={() => moveToStep("trip")}
-                >
-                  여행 설정 보기
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary rounded-full px-4 py-3 text-left text-sm font-semibold text-slate-900"
-                  onClick={() => moveToStep("upload")}
-                >
-                  사진 업로드 보기
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary rounded-full px-4 py-3 text-left text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => moveToStep("review")}
-                  disabled={!canOpenReview}
-                >
-                  사진 정리 보기
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary rounded-full px-4 py-3 text-left text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => moveToStep("preview")}
-                  disabled={!canOpenPreview}
-                >
-                  포토북 디자인 보기
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary rounded-full px-4 py-3 text-left text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => moveToStep("publish")}
-                  disabled={!canOpenPublish}
-                >
-                  Sweetbook 생성 보기
-                </button>
-              </div>
-            </div>
-
-            <div className="studio-card rounded-[32px] p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                제출 메모
-              </p>
-              <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                <li>실사진 흐름은 이 스튜디오 페이지 하나에서 설명할 수 있도록 정리했습니다.</li>
-                <li>포맷은 타임라인, 포스트카드 맵, 포토 에세이 세 가지로 고정했습니다.</li>
-                <li>Gemini 연결 전까지는 GPS와 시간대 기반으로 장소 그룹을 만들고, 필요한 것만 수동 보정합니다.</li>
-              </ul>
-            </div>
-          </aside>
         </div>
+      </main>
 
-        <div className="mobile-step-dock mx-auto w-full max-w-5xl rounded-[24px] p-3">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="button-secondary min-h-12 shrink-0 rounded-[16px] px-4 py-3 text-sm font-semibold text-slate-900 disabled:opacity-45"
-              onClick={() => {
-                if (previousStep) {
-                  moveToStep(previousStep.id);
-                }
-              }}
-              disabled={!previousStep}
-            >
-              이전
-            </button>
-            <div className="min-w-0 flex-1 rounded-[18px] border border-[var(--line)] bg-white px-4 py-3">
-              <div className="grid grid-cols-5 gap-1.5">
-                {studioSteps.map((step) => {
-                  const isCurrent = step.id === activeStep;
-                  const isCompleted = step.index < currentStepIndex;
+      <nav className="fixed bottom-0 left-0 z-50 flex w-full items-center justify-between border-t border-[rgba(191,201,196,0.2)] bg-[#fbf9f4] px-6 py-4">
+        {previousStep ? (
+          <Link
+            href={getStudioStepHref(previousStep.id)}
+            className="flex items-center justify-center px-6 py-3 text-[#3f4945] transition-all duration-200 hover:bg-[#004d40] hover:text-white active:scale-[0.98]"
+          >
+            <span className="material-symbols-outlined mr-2">arrow_back</span>
+            <span className="text-[10px] font-medium uppercase tracking-[0.22em]">Back</span>
+          </Link>
+        ) : (
+          <Link
+            href="/"
+            className="flex items-center justify-center px-6 py-3 text-[#3f4945] transition-all duration-200 hover:bg-[#004d40] hover:text-white active:scale-[0.98]"
+          >
+            <span className="material-symbols-outlined mr-2">arrow_back</span>
+            <span className="text-[10px] font-medium uppercase tracking-[0.22em]">Back</span>
+          </Link>
+        )}
 
-                  return (
-                    <span
-                      key={step.id}
-                      className={`h-1.5 rounded-full ${
-                        isCurrent
-                          ? "bg-[var(--accent)]"
-                          : isCompleted
-                            ? "bg-[rgba(160,62,64,0.24)]"
-                            : "bg-[var(--sand)]"
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                {currentStepIndex} / {studioSteps.length}
-              </p>
-              <p className="mt-1 truncate text-sm font-semibold text-slate-950">
-                {studioSteps[currentStepIndex - 1]?.label}
-              </p>
-            </div>
-            {mobilePrimaryAction ? (
-              <button
-                type="button"
-                className="button-primary min-h-12 shrink-0 rounded-[16px] px-4 py-3 text-sm font-semibold text-white disabled:opacity-45"
-                onClick={mobilePrimaryAction.onClick}
-                disabled={mobilePrimaryAction.disabled}
-              >
-                {mobilePrimaryAction.label}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
+        {bottomNavigationHref && bottomNavigationLabel ? (
+          <Link
+            href={bottomNavigationHref}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00342b] px-8 py-3 text-[14px] font-bold leading-none !text-white visited:!text-white hover:bg-[#004d40] hover:!text-white active:scale-[0.98] active:!text-white"
+          >
+            {bottomNavigationLabel}
+            <span className="material-symbols-outlined text-[18px] leading-none">arrow_forward</span>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="inline-flex touch-manipulation items-center justify-center gap-2 rounded-xl bg-[#00342b] px-8 py-3 text-[14px] font-bold leading-none text-white transition-all duration-200 hover:bg-[#004d40] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => runBottomAction(bottomPrimaryAction?.onClick ?? null)}
+            disabled={bottomPrimaryAction?.disabled ?? true}
+          >
+            {bottomPrimaryAction?.label ?? "다음"}
+            <span className="material-symbols-outlined text-[18px] leading-none">arrow_forward</span>
+          </button>
+        )}
+      </nav>
     </div>
   );
 }

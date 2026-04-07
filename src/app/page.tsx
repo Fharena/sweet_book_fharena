@@ -40,7 +40,7 @@ export default function Home() {
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/studio"
-                  className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white"
+                  className="button-primary rounded-full px-5 py-3 text-sm font-semibold !text-white visited:!text-white"
                 >
                   내 사진으로 시작
                 </Link>

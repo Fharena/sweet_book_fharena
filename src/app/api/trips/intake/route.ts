@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
 import type { ManualLocationOverride } from "@/lib/trip-domain";
+import { isTripDraft, type TripDraft } from "@/lib/trip-draft";
 import { persistUploadedFile } from "@/lib/server/uploads";
 import { extractPhotoMetadata } from "@/lib/server/trips/exif";
 import { groupPhotosIntoTrip } from "@/lib/server/trips/grouping";
+import { applyResolvedLocationLabels } from "@/lib/server/trips/reverse-geocode";
 
 export const runtime = "nodejs";
 
@@ -17,6 +19,19 @@ function parseManualOverrides(rawValue: FormDataEntryValue | null) {
     return new Map(overrides.map((override) => [override.fileName, override]));
   } catch {
     return new Map<string, ManualLocationOverride>();
+  }
+}
+
+function parseExistingDraft(rawValue: FormDataEntryValue | null) {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    return isTripDraft(parsed) ? (parsed as TripDraft) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -37,6 +52,7 @@ export async function POST(request: Request) {
   const travelStart = formData.get("travelStart");
   const travelEnd = formData.get("travelEnd");
   const manualOverrides = parseManualOverrides(formData.get("manualLocations"));
+  const existingDraft = parseExistingDraft(formData.get("existingDraft"));
   const draftId = `draft-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
   const photos = await Promise.all(
@@ -56,11 +72,14 @@ export async function POST(request: Request) {
     }),
   );
 
+  const mergedPhotos = [...(existingDraft?.photos ?? []), ...photos];
+  const resolvedPhotos = await applyResolvedLocationLabels(mergedPhotos);
+
   const groupedTrip = groupPhotosIntoTrip(
     tripName,
     typeof travelStart === "string" ? travelStart : null,
     typeof travelEnd === "string" ? travelEnd : null,
-    photos,
+    resolvedPhotos,
   );
 
   return NextResponse.json(groupedTrip);

@@ -25,21 +25,9 @@ export function AutoDarkGuard() {
   useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
-
-    const syncThemeClass = () => {
-      const isAutoDark = detectAutoDarkTheme();
-      root.classList.toggle(AUTO_DARK_CLASS, isAutoDark);
-      body.classList.toggle(AUTO_DARK_CLASS, isAutoDark);
-    };
-
-    syncThemeClass();
-    window.addEventListener("pageshow", syncThemeClass);
-    document.addEventListener("visibilitychange", syncThemeClass);
-
-    return () => {
-      window.removeEventListener("pageshow", syncThemeClass);
-      document.removeEventListener("visibilitychange", syncThemeClass);
-    };
+    const isAutoDark = detectAutoDarkTheme();
+    root.classList.toggle(AUTO_DARK_CLASS, isAutoDark);
+    body.classList.toggle(AUTO_DARK_CLASS, isAutoDark);
   }, []);
 
   return null;

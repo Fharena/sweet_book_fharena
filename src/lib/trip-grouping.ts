@@ -44,8 +44,16 @@ export function comparePhotos(left: ImportedPhoto, right: ImportedPhoto) {
   return left.fileName.localeCompare(right.fileName);
 }
 
-function isMeaningfulLocationLabel(label: string | null) {
-  return Boolean(label && !/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(label));
+function isGenericSpotLabel(label: string | null) {
+  return Boolean(label && /^스팟\s*\d+$/i.test(label.trim()));
+}
+
+export function isMeaningfulLocationLabel(label: string | null) {
+  return Boolean(
+    label &&
+      !/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(label) &&
+      !isGenericSpotLabel(label),
+  );
 }
 
 function toRadians(value: number) {
@@ -144,6 +152,7 @@ function enrichMissingLocationLabels(sortedPhotos: ImportedPhoto[]) {
     }
 
     if (ownClusterLabel) {
+      const hasMeaningfulClusterLabel = isMeaningfulLocationLabel(ownClusterLabel);
       const clusterIndex =
         clusterOrder.get(`${photo.dateKey}:${ownClusterLabel}`) ?? index + 1;
 
@@ -151,8 +160,10 @@ function enrichMissingLocationLabels(sortedPhotos: ImportedPhoto[]) {
         ...photo,
         locationLabel: ownClusterLabel,
         locationSource: photo.locationSource === "manual" ? "manual" : "exif",
-        requiresManualLocationTagging: false,
-        groupingReason: `GPS 좌표를 기준으로 ${ownClusterLabel} 클러스터 #${clusterIndex}에 자동 배치했습니다.`,
+        requiresManualLocationTagging: !hasMeaningfulClusterLabel,
+        groupingReason: hasMeaningfulClusterLabel
+          ? `GPS 좌표를 기준으로 ${ownClusterLabel} 클러스터 #${clusterIndex}에 자동 배치했습니다.`
+          : `GPS 좌표를 기준으로 같은 장소를 묶었지만, 주소 라벨을 찾지 못해 ${ownClusterLabel} 임시 이름으로 표시했습니다.`,
       };
     }
 
@@ -214,8 +225,53 @@ function enrichMissingLocationLabels(sortedPhotos: ImportedPhoto[]) {
   });
 }
 
-function formatDayLabel(dateKey: string, index: number) {
-  return dateKey === "undated" ? "일정 미정" : `${index + 1}일차`;
+function parseDateKey(dateKey: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return null;
+  }
+
+  const parsed = new Date(`${dateKey}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getTravelDayIndex(dateKey: string, travelStart: string | null, fallbackIndex: number) {
+  if (dateKey === "undated") {
+    return null;
+  }
+
+  const tripDate = parseDateKey(dateKey);
+  const tripStartDate = travelStart ? parseDateKey(travelStart) : null;
+
+  if (tripDate && tripStartDate) {
+    const ms = tripDate.getTime() - tripStartDate.getTime();
+    const diff = Math.floor(ms / (24 * 60 * 60 * 1000));
+    if (diff >= 0) {
+      return diff;
+    }
+  }
+
+  return fallbackIndex;
+}
+
+function formatTravelDayLabel(
+  dateKey: string,
+  fallbackIndex: number,
+  travelStart: string | null,
+) {
+  const dayIndex = getTravelDayIndex(dateKey, travelStart, fallbackIndex);
+  if (dayIndex === null) {
+    return "날짜 미정";
+  }
+
+  const parsedDate = parseDateKey(dateKey);
+  if (!parsedDate) {
+    return `날짜 미정`;
+  }
+
+  const month = parsedDate.getMonth() + 1;
+  const day = parsedDate.getDate();
+
+  return `${month}/${day} (${month}월 ${day}일)`;
 }
 
 function buildChapterTitle(placeLabel: string, dayLabel: string) {
@@ -241,6 +297,7 @@ export function groupPhotosIntoTrip(
     const placeLabel = photo.locationLabel ?? "위치 태그 필요";
     const chapterKey = `${photo.dateKey}::${placeLabel}`;
     const dayIndex = Math.max(dayOrder.indexOf(photo.dateKey), 0);
+    const dayLabel = formatTravelDayLabel(photo.dateKey, dayIndex, travelStart);
 
     const existing = chaptersMap.get(chapterKey);
     if (existing) {
@@ -251,8 +308,8 @@ export function groupPhotosIntoTrip(
 
     chaptersMap.set(chapterKey, {
       id: `chapter-${chaptersMap.size + 1}`,
-      title: buildChapterTitle(placeLabel, formatDayLabel(photo.dateKey, dayIndex)),
-      dayLabel: formatDayLabel(photo.dateKey, dayIndex),
+      title: buildChapterTitle(placeLabel, dayLabel),
+      dayLabel,
       dateKey: photo.dateKey,
       placeLabel,
       photoIds: [photo.id],

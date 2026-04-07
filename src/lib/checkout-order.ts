@@ -63,6 +63,40 @@ const sessionSnapshotCache = new Map<
   }
 >();
 
+function safeGetSessionItem(key: string) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetSessionItem(key: string, value: string) {
+  try {
+    window.sessionStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeRemoveSessionItem(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeDispatchCheckoutChanged() {
+  try {
+    window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
+  } catch {
+    // Ignore environments where custom window events are restricted.
+  }
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -76,7 +110,7 @@ function readSessionValue<T>(key: string, validator: (value: unknown) => value i
     return null;
   }
 
-  const rawValue = window.sessionStorage.getItem(key);
+  const rawValue = safeGetSessionItem(key);
   const cachedEntry = sessionSnapshotCache.get(key);
 
   if (cachedEntry && cachedEntry.rawValue === rawValue) {
@@ -128,11 +162,14 @@ export function saveCheckoutComposeResult(result: CheckoutComposeResult) {
     return;
   }
 
-  window.sessionStorage.setItem(
-    CHECKOUT_COMPOSE_RESULT_KEY,
-    JSON.stringify(result),
-  );
-  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
+  if (
+    safeSetSessionItem(
+      CHECKOUT_COMPOSE_RESULT_KEY,
+      JSON.stringify(result),
+    )
+  ) {
+    safeDispatchCheckoutChanged();
+  }
 }
 
 export function clearCheckoutComposeResult() {
@@ -140,8 +177,9 @@ export function clearCheckoutComposeResult() {
     return;
   }
 
-  window.sessionStorage.removeItem(CHECKOUT_COMPOSE_RESULT_KEY);
-  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
+  if (safeRemoveSessionItem(CHECKOUT_COMPOSE_RESULT_KEY)) {
+    safeDispatchCheckoutChanged();
+  }
 }
 
 export function isCheckoutOrderResult(value: unknown): value is CheckoutOrderResult {
@@ -166,8 +204,9 @@ export function saveCheckoutOrderResult(result: CheckoutOrderResult) {
     return;
   }
 
-  window.sessionStorage.setItem(CHECKOUT_ORDER_RESULT_KEY, JSON.stringify(result));
-  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
+  if (safeSetSessionItem(CHECKOUT_ORDER_RESULT_KEY, JSON.stringify(result))) {
+    safeDispatchCheckoutChanged();
+  }
 }
 
 export function clearCheckoutOrderResult() {
@@ -175,8 +214,9 @@ export function clearCheckoutOrderResult() {
     return;
   }
 
-  window.sessionStorage.removeItem(CHECKOUT_ORDER_RESULT_KEY);
-  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
+  if (safeRemoveSessionItem(CHECKOUT_ORDER_RESULT_KEY)) {
+    safeDispatchCheckoutChanged();
+  }
 }
 
 export function isCheckoutOrderDraft(value: unknown): value is CheckoutOrderDraft {
@@ -203,8 +243,9 @@ export function saveCheckoutOrderDraft(draft: CheckoutOrderDraft) {
     return;
   }
 
-  window.sessionStorage.setItem(CHECKOUT_ORDER_DRAFT_KEY, JSON.stringify(draft));
-  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
+  if (safeSetSessionItem(CHECKOUT_ORDER_DRAFT_KEY, JSON.stringify(draft))) {
+    safeDispatchCheckoutChanged();
+  }
 }
 
 export function clearCheckoutOrderDraft() {
@@ -212,6 +253,7 @@ export function clearCheckoutOrderDraft() {
     return;
   }
 
-  window.sessionStorage.removeItem(CHECKOUT_ORDER_DRAFT_KEY);
-  window.dispatchEvent(new Event(CHECKOUT_SESSION_STORAGE_EVENT));
+  if (safeRemoveSessionItem(CHECKOUT_ORDER_DRAFT_KEY)) {
+    safeDispatchCheckoutChanged();
+  }
 }

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { AppShell } from "@/components/app-shell";
 import { BackendHealthCard } from "@/components/backend-health-card";
 import { WebhookOpsClient } from "@/components/webhook-ops-client";
@@ -66,7 +68,15 @@ export default function WebhookOpsPage() {
         </div>
       }
     >
-      <WebhookOpsClient />
+      <Suspense
+        fallback={
+          <div className="soft-card rounded-[28px] p-6 text-sm leading-6 text-slate-600">
+            웹훅 운영 패널을 불러오는 중입니다.
+          </div>
+        }
+      >
+        <WebhookOpsClient />
+      </Suspense>
     </AppShell>
   );
 }

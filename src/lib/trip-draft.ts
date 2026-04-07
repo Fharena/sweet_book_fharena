@@ -1,9 +1,6 @@
 import type { PhotoLocationSource } from "@/lib/trip-domain";
 import { groupPhotosIntoTrip } from "@/lib/trip-grouping";
-import {
-  isTravelThemeId,
-  type TravelThemeId,
-} from "@/lib/travel-themes";
+import { isTravelThemeId, type TravelThemeId } from "@/lib/travel-themes";
 
 export type TripDraftPhoto = {
   id: string;
@@ -56,6 +53,40 @@ export const TRIP_DRAFT_STORAGE_EVENT = "triplogue:draft-changed";
 
 let cachedDraftRawValue: string | null | undefined;
 let cachedDraftValue: TripDraft | null = null;
+
+function safeGetSessionItem(key: string) {
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetSessionItem(key: string, value: string) {
+  try {
+    window.sessionStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeRemoveSessionItem(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeDispatchDraftChanged() {
+  try {
+    window.dispatchEvent(new Event(TRIP_DRAFT_STORAGE_EVENT));
+  } catch {
+    // Ignore environments where custom window events are restricted.
+  }
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -130,7 +161,7 @@ export function loadTripDraft(): TripDraft | null {
     return null;
   }
 
-  const rawValue = window.sessionStorage.getItem(TRIP_DRAFT_STORAGE_KEY);
+  const rawValue = safeGetSessionItem(TRIP_DRAFT_STORAGE_KEY);
   if (rawValue === cachedDraftRawValue) {
     return cachedDraftValue;
   }
@@ -157,8 +188,9 @@ export function saveTripDraft(draft: TripDraft) {
     return;
   }
 
-  window.sessionStorage.setItem(TRIP_DRAFT_STORAGE_KEY, JSON.stringify(draft));
-  window.dispatchEvent(new Event(TRIP_DRAFT_STORAGE_EVENT));
+  if (safeSetSessionItem(TRIP_DRAFT_STORAGE_KEY, JSON.stringify(draft))) {
+    safeDispatchDraftChanged();
+  }
 }
 
 export function clearTripDraft() {
@@ -166,8 +198,9 @@ export function clearTripDraft() {
     return;
   }
 
-  window.sessionStorage.removeItem(TRIP_DRAFT_STORAGE_KEY);
-  window.dispatchEvent(new Event(TRIP_DRAFT_STORAGE_EVENT));
+  if (safeRemoveSessionItem(TRIP_DRAFT_STORAGE_KEY)) {
+    safeDispatchDraftChanged();
+  }
 }
 
 export function applyManualLocationTagToDraft(
@@ -209,6 +242,49 @@ export function applyManualLocationTagToDraft(
   };
 }
 
+export function applyManualDateTagToDraft(
+  draft: TripDraft,
+  photoIds: string[],
+  dateKey: string,
+) {
+  const normalizedDateKey = dateKey.trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDateKey) || photoIds.length === 0) {
+    return draft;
+  }
+
+  const selectedPhotoIds = new Set(photoIds);
+  const nextPhotos = draft.photos.map((photo) => {
+    if (!selectedPhotoIds.has(photo.id)) {
+      return photo;
+    }
+
+    const nextCapturedAt =
+      photo.capturedAt && photo.capturedAt !== ""
+        ? photo.capturedAt
+        : `${normalizedDateKey}T12:00:00.000Z`;
+
+    return {
+      ...photo,
+      capturedAt: nextCapturedAt,
+      dateKey: normalizedDateKey,
+      groupingReason: "날짜 수동 보정",
+    };
+  });
+
+  const regroupedDraft = groupPhotosIntoTrip(
+    draft.tripName,
+    draft.travelStart,
+    draft.travelEnd,
+    nextPhotos,
+  );
+
+  return {
+    ...regroupedDraft,
+    selectedThemeId: draft.selectedThemeId,
+  };
+}
+
 export function applyThemeSelectionToDraft(
   draft: TripDraft,
   selectedThemeId: TravelThemeId,
@@ -216,5 +292,26 @@ export function applyThemeSelectionToDraft(
   return {
     ...draft,
     selectedThemeId,
+  };
+}
+
+export function removePhotosFromDraft(draft: TripDraft, photoIds: string[]) {
+  if (photoIds.length === 0) {
+    return draft;
+  }
+
+  const selectedPhotoIds = new Set(photoIds);
+  const nextPhotos = draft.photos.filter((photo) => !selectedPhotoIds.has(photo.id));
+
+  const regroupedDraft = groupPhotosIntoTrip(
+    draft.tripName,
+    draft.travelStart,
+    draft.travelEnd,
+    nextPhotos,
+  );
+
+  return {
+    ...regroupedDraft,
+    selectedThemeId: draft.selectedThemeId,
   };
 }

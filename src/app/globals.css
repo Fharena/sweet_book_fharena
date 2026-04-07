@@ -33,6 +33,26 @@
   box-sizing: border-box;
 }
 
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
 html {
   color-scheme: only light !important;
   background-color: var(--background);
@@ -320,7 +340,7 @@ a {
 
 .button-primary {
   background: var(--accent);
-  box-shadow: 0 10px 24px rgba(0, 52, 43, 0.12);
+  box-shadow: 0 6px 16px rgba(0, 52, 43, 0.08);
   transition:
     transform 180ms ease,
     box-shadow 180ms ease,
@@ -330,7 +350,7 @@ a {
 .button-primary:hover {
   transform: translateY(-1px);
   background: var(--accent-deep);
-  box-shadow: 0 14px 28px rgba(0, 52, 43, 0.14);
+  box-shadow: 0 8px 18px rgba(0, 52, 43, 0.1);
   filter: none;
 }
 
@@ -504,14 +524,7 @@ a {
 }
 
 .studio-hero::after {
-  content: "";
-  position: absolute;
-  inset: auto -5% -12% auto;
-  width: 240px;
-  height: 240px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.8), transparent 72%);
-  pointer-events: none;
+  content: none;
 }
 
 .studio-card {
@@ -524,14 +537,7 @@ a {
 }
 
 .studio-card::after {
-  content: "";
-  position: absolute;
-  inset: auto auto -40px -40px;
-  width: 160px;
-  height: 160px;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.58), transparent 72%);
-  pointer-events: none;
+  content: none;
 }
 
 .wizard-rail {
@@ -601,6 +607,17 @@ a {
 @media (max-width: 640px) {
   body {
     background-attachment: scroll;
+  }
+
+  button,
+  a,
+  summary,
+  label,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body::after {

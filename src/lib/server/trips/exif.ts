@@ -80,9 +80,7 @@ export async function extractPhotoMetadata(
     exif = null;
   }
 
-  const capturedAt =
-    pickCapturedAt(exif) ||
-    (file.lastModified ? new Date(file.lastModified).toISOString() : null);
+  const capturedAt = pickCapturedAt(exif);
   const coordinates = normalizeCoordinates(exif);
   const override = options.manualOverrides?.get(file.name);
 
@@ -97,6 +95,10 @@ export async function extractPhotoMetadata(
   } else if (coordinates) {
     locationSource = "exif";
     groupingReason = `${formatCoordinateLabel(coordinates)} 좌표를 읽었습니다. 같은 날짜와 인접 좌표를 기준으로 장소를 자동 정리합니다.`;
+  } else if (capturedAt) {
+    groupingReason = "촬영 날짜 메타데이터를 읽었습니다. 위치가 없어도 날짜 흐름 기준으로 챕터를 나눕니다.";
+  } else {
+    groupingReason = "촬영 날짜 메타데이터가 없어 검토 단계에서 날짜 보정이 필요합니다.";
   }
 
   const capturedDate = capturedAt ? new Date(capturedAt) : null;

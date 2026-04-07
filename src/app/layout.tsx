@@ -29,6 +29,11 @@ export default function RootLayout({
         <meta name="color-scheme" content="light" />
         <meta name="supported-color-schemes" content="light" />
         <meta name="theme-color" content="#fbf9f4" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        />
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AutoDarkGuard />
