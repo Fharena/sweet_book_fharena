@@ -41,11 +41,12 @@ git push origin codex/frontend-sync:codex/frontend-sync
 
 upstream이 꼬였을 때도 브랜치 기준이 명확해진다.
 
-### 4. Codex 세션 push가 막히면 이전 문제 방식으로 되돌리지 않는다
+### 4. Codex 세션 push가 막히면 GitHub 커넥터 우회를 기본 경로로 쓴다
 
 - `gh.exe` helper를 다시 붙이지 않는다.
 - 깨진 credential helper 경로를 추가하지 않는다.
-- 필요하면 GitHub 커넥터로 브랜치 ref를 올리거나, 사용자 터미널에서 push 한다.
+- shell `git push`가 인증 프롬프트/credential manager 문제로 막히면, 같은 세션 안에서 반복 재시도하지 않고 GitHub 커넥터로 브랜치 ref를 직접 갱신한다.
+- 커넥터로 처리할 수 없는 경우에만 사용자 터미널에서 push 한다.
 
 ## merge 기준
 
