@@ -307,10 +307,12 @@ function PhotoSurface({
   photo,
   className,
   subtitle,
+  showOverlay = true,
 }: {
   photo: TripDraftPhoto | undefined;
   className?: string;
   subtitle?: string;
+  showOverlay?: boolean;
 }) {
   const src = photo ? getPhotoSource(photo) : null;
 
@@ -345,12 +347,14 @@ function PhotoSurface({
           </div>
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,_transparent,_rgba(15,23,42,0.72))] p-4 text-white">
-        <p className="text-sm font-semibold">{photo.locationLabel ?? "위치 확인 필요"}</p>
-        <p className="mt-1 text-xs text-white/78">
-          {subtitle ?? formatDateLabel(photo.capturedAt)}
-        </p>
-      </div>
+      {showOverlay ? (
+        <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,_transparent,_rgba(15,23,42,0.72))] p-4 text-white">
+          <p className="text-sm font-semibold">{photo.locationLabel ?? "위치 확인 필요"}</p>
+          <p className="mt-1 text-xs text-white/78">
+            {subtitle ?? formatDateLabel(photo.capturedAt)}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -366,35 +370,64 @@ function PreviewSpreadCard({
   const supportingPhotos = spread.supportingPhotoIds
     .map((photoId) => photoById.get(photoId))
     .filter((photo): photo is TripDraftPhoto => Boolean(photo));
+  const firstSupportingPhoto = supportingPhotos[0];
+  const secondSupportingPhoto = supportingPhotos[1];
 
   if (spread.layoutKind === "photo-essay") {
     return (
-      <article className="studio-card rounded-[32px] p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <article className="space-y-8 rounded-[32px] bg-transparent py-2">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-              {spread.dayLabel}
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent-secondary)]">
+              Issue No. 03
             </p>
-            <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+            <h3 className="mt-3 text-[clamp(2rem,4vw,4.8rem)] font-semibold tracking-[-0.06em] text-[var(--accent)]">
               {spread.placeLabel}
             </h3>
           </div>
-          <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-            포토 에세이
-          </span>
+          <p className="text-sm italic text-slate-500">{spread.dayLabel}</p>
         </div>
-        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(240px,0.9fr)]">
-          <PhotoSurface photo={leadPhoto} className="min-h-[22rem]" subtitle={spread.caption} />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            {supportingPhotos.length > 0 ? (
-              supportingPhotos.map((photo) => (
-                <PhotoSurface key={photo.id} photo={photo} className="min-h-[10rem]" />
-              ))
-            ) : (
-              <div className="flex min-h-[10rem] items-center rounded-[28px] border border-dashed border-[var(--line)] px-5 py-4 text-sm text-slate-500">
-                보조 컷은 자동으로 최대 네 장까지 배치됩니다.
-              </div>
-            )}
+        <PhotoSurface
+          photo={leadPhoto}
+          showOverlay={false}
+          className="min-h-[22rem] rounded-[28px] border border-[rgba(191,201,196,0.18)] bg-[var(--surface-strong)]"
+        />
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-[clamp(1.4rem,2.8vw,2.2rem)] italic leading-[1.7] tracking-[-0.03em] text-slate-700">
+            “{spread.caption}”
+          </p>
+          <p className="mt-5 text-xs uppercase tracking-[0.26em] text-slate-500">
+            {spread.placeLabel} · {spread.dayLabel}
+          </p>
+        </div>
+        <div className="grid gap-8 md:grid-cols-[minmax(0,0.84fr)_minmax(0,1.16fr)] md:items-start">
+          <div className="space-y-6 md:pt-8">
+            <div className="rounded-[28px] bg-white px-6 py-6 shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
+              <p className="text-sm leading-7 text-slate-600">
+                찰나의 기록을 길게 늘어뜨리기보다, 대표 장면 하나와 짧은 문장으로 감정선을 남기는 포맷입니다.
+              </p>
+            </div>
+            {firstSupportingPhoto ? (
+              <PhotoSurface
+                photo={firstSupportingPhoto}
+                showOverlay={false}
+                className="min-h-[15rem] rounded-[24px]"
+              />
+            ) : null}
+          </div>
+          <div className="space-y-5">
+            {secondSupportingPhoto ? (
+              <PhotoSurface
+                photo={secondSupportingPhoto}
+                showOverlay={false}
+                className="min-h-[18rem] rounded-[24px]"
+              />
+            ) : null}
+            <div className="rounded-[30px] bg-[var(--sand)] px-6 py-8 text-center">
+              <p className="text-2xl font-semibold tracking-[-0.05em] text-[var(--accent)]">
+                사진은 침묵으로 기록하는 가장 뜨거운 문장입니다.
+              </p>
+            </div>
           </div>
         </div>
       </article>
@@ -403,105 +436,120 @@ function PreviewSpreadCard({
 
   if (spread.layoutKind === "timeline-classic") {
     return (
-      <article className="studio-card rounded-[32px] p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-              {spread.dayLabel}
-            </p>
-            <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-              {spread.chapterTitle}
-            </h3>
-          </div>
-          <span className="rounded-full bg-[var(--accent-secondary-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent-secondary)]">
-            타임라인 클래식
+      <article className="grid gap-8 py-4 md:grid-cols-12 md:items-start">
+        <div className="space-y-4 md:col-span-3 md:sticky md:top-28">
+          <span className="block text-5xl font-semibold tracking-[-0.06em] text-[var(--accent)]">
+            {spread.dayLabel.split("-").pop() ?? spread.dayLabel}
           </span>
+          <span className="block text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+            Timeline Classic
+          </span>
+          <h3 className="text-2xl font-semibold tracking-[-0.05em] text-slate-950">
+            {spread.chapterTitle}
+          </h3>
+          <p className="text-sm leading-7 text-slate-600">{spread.caption}</p>
+          <div className="rounded-[24px] bg-white px-4 py-4 shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+              {spread.placeLabel}
+            </p>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              {spread.coordinateLabel ?? "좌표 태그가 있는 사진을 중심으로 같은 장소를 하나의 챕터로 묶었습니다."}
+            </p>
+          </div>
         </div>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">{spread.caption}</p>
-        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-          <div className="rounded-[28px] border border-[var(--line)] bg-white p-5">
-            <div className="space-y-3">
-              <div className="rounded-[22px] bg-[var(--accent-soft)] px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                  날짜
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{spread.dayLabel}</p>
-              </div>
-              <div className="rounded-[22px] border border-[var(--line)] px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  장소
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{spread.placeLabel}</p>
-              </div>
-              <div className="rounded-[22px] border border-[var(--line)] px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  좌표 힌트
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-700">
-                  {spread.coordinateLabel ?? "좌표 없음"}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <PhotoSurface photo={leadPhoto} className="sm:col-span-2 min-h-[16rem]" />
-            {supportingPhotos.map((photo) => (
-              <PhotoSurface key={photo.id} photo={photo} className="min-h-[10rem]" />
-            ))}
-          </div>
+        <div className="grid gap-4 md:col-span-9 md:grid-cols-2">
+          <PhotoSurface
+            photo={leadPhoto}
+            showOverlay={false}
+            className="min-h-[17rem] rounded-[26px] md:col-span-2"
+          />
+          {supportingPhotos.map((photo) => (
+            <PhotoSurface
+              key={photo.id}
+              photo={photo}
+              showOverlay={false}
+              className="min-h-[11rem] rounded-[22px]"
+            />
+          ))}
         </div>
       </article>
     );
   }
 
   return (
-    <article className="studio-card rounded-[32px] p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-            {spread.dayLabel}
-          </p>
-          <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-            {spread.placeLabel}
-          </h3>
-        </div>
-        <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-          포스트카드 맵
-        </span>
-      </div>
-      <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(260px,0.72fr)_minmax(0,1.28fr)]">
-        <div className="rounded-[28px] border border-[var(--line)] bg-white p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            장소 카드
-          </p>
-          <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-            {spread.placeLabel}
-          </p>
-          <p className="mt-3 text-sm leading-6 text-slate-600">{spread.caption}</p>
-          <div className="mt-5 grid gap-3">
-            <div className="rounded-[22px] bg-[var(--accent-soft)] px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                날짜
-              </p>
-              <p className="mt-2 text-base font-semibold text-slate-900">{spread.dayLabel}</p>
-            </div>
-            <div className="rounded-[22px] border border-[var(--line)] px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                좌표
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                {spread.coordinateLabel ?? "위치 태그가 없어 수동 보정 기준으로 정리했습니다."}
-              </p>
+    <article className="grid gap-8 py-4 md:grid-cols-12 md:items-start">
+      <div className="md:col-span-7">
+        <div className="rotate-[-2deg] rounded-[28px] border border-[rgba(191,201,196,0.16)] bg-white p-5 shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+              Route Illustration
+            </p>
+            <span className="rounded-full border border-[rgba(191,201,196,0.18)] px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-slate-500">
+              stamp
+            </span>
+          </div>
+          <div className="relative mt-5 overflow-hidden rounded-[22px] border border-[rgba(191,201,196,0.16)] bg-[var(--sand)]">
+            <PhotoSurface
+              photo={leadPhoto}
+              showOverlay={false}
+              className="min-h-[18rem] rounded-none border-0"
+            />
+            <div className="pointer-events-none absolute inset-0">
+              <svg className="h-full w-full" viewBox="0 0 800 460" preserveAspectRatio="none">
+                <path
+                  d="M180,120 Q360,170 610,300"
+                  fill="none"
+                  stroke="#00342b"
+                  strokeDasharray="10 10"
+                  strokeWidth="3"
+                />
+              </svg>
+              <span className="absolute left-[24%] top-[24%] h-4 w-4 rounded-full bg-[var(--accent)] shadow-[0_0_0_10px_rgba(0,52,43,0.12)]" />
+              <span className="absolute right-[20%] top-[62%] h-4 w-4 rounded-full bg-[var(--accent-secondary)] shadow-[0_0_0_10px_rgba(160,62,64,0.12)]" />
             </div>
           </div>
+          <div className="mt-5 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-base font-semibold tracking-[-0.04em] text-slate-950">
+                {spread.placeLabel}
+              </p>
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">
+                {spread.dayLabel}
+              </p>
+            </div>
+            <p className="max-w-[14rem] text-right text-xs leading-5 text-slate-500">
+              {spread.coordinateLabel ?? "위치 태그가 없는 컷은 수동 보정 기준으로 경로에 합류시켰습니다."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6 md:col-span-5 md:pt-10">
+        <div className="rotate-[3deg] rounded-[24px] border border-[rgba(191,201,196,0.16)] bg-white p-4 shadow-[0_8px_32px_rgba(27,28,25,0.04)]">
+          <PhotoSurface
+            photo={firstSupportingPhoto ?? leadPhoto}
+            showOverlay={false}
+            className="min-h-[16rem] rounded-[18px] border-0"
+          />
+          <p className="mt-4 text-sm italic leading-6 text-slate-600">{spread.caption}</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <PhotoSurface photo={leadPhoto} className="sm:col-span-2 min-h-[17rem]" />
-          {supportingPhotos.map((photo) => (
-            <PhotoSurface key={photo.id} photo={photo} className="min-h-[10rem]" />
-          ))}
+        <div className="rounded-[28px] bg-[var(--accent)] px-6 py-6 text-white">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/72">
+            Traveler&apos;s note
+          </p>
+          <p className="mt-4 text-sm leading-7 text-white/88">
+            지도를 따라 이동한 장소와 대표 컷을 포스트카드처럼 쌓아서 남기는 포맷입니다. 여행의 흐름이 먼저 보이고, 사진은 그 위에 메모처럼 붙습니다.
+          </p>
         </div>
+
+        {secondSupportingPhoto ? (
+          <PhotoSurface
+            photo={secondSupportingPhoto}
+            showOverlay={false}
+            className="min-h-[13rem] rounded-[22px]"
+          />
+        ) : null}
       </div>
     </article>
   );
@@ -938,7 +986,7 @@ export function StudioClient() {
   }
 
   function getStepPanelClass(stepId: StudioStepId) {
-    return `wizard-stage studio-card rounded-[30px] p-5 sm:p-6 ${activeStep === stepId ? "is-active ring-1 ring-[rgba(15,118,110,0.2)]" : ""}`;
+    return `wizard-stage studio-card rounded-[30px] p-5 sm:p-6 ${activeStep === stepId ? "is-active" : ""}`;
   }
 
   const mobilePrimaryAction = (() => {
@@ -950,18 +998,26 @@ export function StudioClient() {
           disabled: false,
         };
       case "upload":
+        if (selectedUploads.length > 0) {
+          return {
+            label: isUploading ? "사진 정리 중..." : "사진 읽고 정리하기",
+            onClick: handleUpload,
+            disabled: isUploading,
+          };
+        }
+
         if (draft) {
           return {
-            label: "사진 정리 보기",
+            label: "이전 정리 보기",
             onClick: () => moveToStep("review"),
             disabled: !canOpenReview,
           };
         }
 
         return {
-          label: isUploading ? "사진 정리 중..." : "사진 읽고 정리하기",
-          onClick: handleUpload,
-          disabled: isUploading || selectedUploads.length === 0,
+          label: "사진 선택하기",
+          onClick: () => fileInputRef.current?.click(),
+          disabled: false,
         };
       case "review":
         return {
@@ -987,33 +1043,48 @@ export function StudioClient() {
   })();
 
   return (
-    <div className="relative px-4 py-6 sm:px-6 lg:px-8">
+    <div className="relative px-4 py-6 pb-36 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <section
-          className={`studio-hero rounded-[32px] border border-white/70 px-5 py-6 sm:px-8 ${activeStep === "trip" ? "sm:py-10" : "sm:py-7"}`}
-        >
-          <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.55fr)] xl:items-start">
-            <div className="max-w-3xl space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="rounded-full bg-[var(--sand)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
-                  Triplogue Studio
-                </span>
-                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  Step {String(currentStepIndex).padStart(2, "0")} / {String(studioSteps.length).padStart(2, "0")}
-                </span>
-              </div>
+        <header className="wizard-rail -mx-4 rounded-none border-x-0 px-4 py-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
+            <span className="text-sm font-extrabold uppercase tracking-[0.2em] text-[var(--accent)]">
+              Triplogue Studio
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="hidden rounded-full bg-[var(--sand)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-600 sm:inline-flex">
+                {draft ? (isDemoSession ? "demo session" : "live session") : "ready"}
+              </span>
+              <Link
+                href="/ops/launchpad"
+                className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:text-[var(--accent)]"
+              >
+                ops
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        <section className="px-1 pt-2 sm:pt-4">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+            <div className="max-w-3xl space-y-5">
+              <span className="inline-flex rounded-full bg-[var(--sand)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
+                AI-Powered Smart Journal
+              </span>
 
               <div className="space-y-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  STEP {String(currentStepIndex).padStart(2, "0")} / {String(studioSteps.length).padStart(2, "0")}
+                </p>
                 <h1
-                  className={`max-w-3xl font-semibold tracking-[-0.06em] text-slate-950 ${activeStep === "trip" ? "text-[clamp(2rem,4.5vw,4.9rem)]" : "text-[clamp(1.55rem,4.8vw,2.2rem)] sm:text-[clamp(1.9rem,4vw,3rem)]"}`}
+                  className={`max-w-3xl font-semibold tracking-[-0.06em] text-slate-950 ${activeStep === "trip" ? "text-[clamp(2.2rem,6vw,4.8rem)]" : "text-[clamp(1.85rem,4.8vw,3.2rem)]"}`}
                 >
                   {activeStep === "trip"
-                    ? "사진을 올리면 날짜와 장소 흐름을 정리해서 포토북 초안을 바로 만듭니다."
+                    ? "사진을 올리면 여행 포토북 초안이 바로 만들어집니다."
                     : currentStepMeta.title}
                 </h1>
-                <p className="max-w-2xl text-sm leading-7 text-slate-600 sm:text-base sm:leading-8">
+                <p className="max-w-2xl text-base leading-8 text-slate-600">
                   {activeStep === "trip"
-                    ? "여행 설정, 업로드, 사진 정리, 포맷 선택, Sweetbook 생성까지 한 흐름으로 이어집니다. 모바일에서는 한 단계씩만 보이고, 아래 고정 액션으로 다음 단계로 이동합니다."
+                    ? "촬영 시간과 위치 흐름을 읽어 날짜별·장소별로 정리하고, 포토북 초안과 주문 흐름까지 한 번에 이어줍니다."
                     : currentStepMeta.copy}
                 </p>
               </div>
@@ -1021,89 +1092,24 @@ export function StudioClient() {
               <div className={`flex flex-wrap gap-3 ${activeStep === "trip" ? "" : "hidden sm:flex"}`}>
                 <button
                   type="button"
-                  className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white"
-                  onClick={() => moveToStep("trip")}
+                  className="button-primary rounded-[18px] px-6 py-3.5 text-sm font-semibold text-white"
+                  onClick={() => moveToStep("upload")}
                 >
-                  {draft ? "내 여행 이어서 보기" : "내 사진으로 시작"}
+                  {draft ? "사진 업로드 이어서 하기" : "내 사진으로 시작하기"}
                 </button>
                 <button
                   type="button"
-                  className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
+                  className="button-secondary rounded-[18px] px-6 py-3.5 text-sm font-semibold text-slate-900"
                   onClick={handleLoadDemo}
                 >
-                  샘플 초안 불러오기
+                  샘플 포토북 보기
                 </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                <Link href="/ops/launchpad" className="font-medium text-[var(--accent)] underline-offset-4 hover:underline">
-                  운영 화면 열기
-                </Link>
-                <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:inline-flex" />
-                <p className="text-sm text-slate-500">
-                  업로드, 정리, 포맷 선택, Sweetbook 생성까지 한 흐름으로 이어집니다.
-                </p>
-              </div>
-            </div>
-
-            <div className="studio-card hidden w-full gap-5 rounded-[28px] p-6 xl:grid">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    진행 상태
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                    {currentStepMeta.label}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{currentStepMeta.copy}</p>
-                </div>
-                <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-                  {draft ? (isDemoSession ? "샘플 세션" : "실사진 세션") : "세션 준비 전"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-5 gap-2">
-                {studioSteps.map((step) => {
-                  const isCurrent = step.id === activeStep;
-                  const isCompleted = step.index < currentStepIndex;
-
-                  return (
-                    <div
-                      key={step.id}
-                      className={`h-1.5 rounded-full ${
-                        isCurrent
-                          ? "bg-[var(--accent)]"
-                          : isCompleted
-                            ? "bg-[rgba(160,62,64,0.28)]"
-                            : "bg-[var(--sand)]"
-                      }`}
-                    />
-                  );
-                })}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[22px] bg-[var(--sand)] px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    사진
-                  </p>
-                  <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-slate-950">
-                    {draft?.stats.totalPhotos ?? 0}장
-                  </p>
-                </div>
-                <div className="rounded-[22px] bg-white px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    챕터
-                  </p>
-                  <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-slate-950">
-                    {draft?.chapters.length ?? 0}개
-                  </p>
-                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <nav className="wizard-rail rounded-[28px] px-4 py-4 sm:px-5">
+        <nav className="wizard-rail mx-auto w-full max-w-5xl rounded-[24px] px-4 py-4 sm:px-5">
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
@@ -1138,7 +1144,7 @@ export function StudioClient() {
             })}
           </div>
 
-          <div className="scroll-row mt-4 flex gap-2 overflow-x-auto pb-1">
+          <div className="scroll-row mt-4 hidden gap-2 overflow-x-auto pb-1 sm:flex">
             {studioSteps.map((step) => {
               const isCurrent = step.id === activeStep;
               const isCompleted = step.index < currentStepIndex;
@@ -1173,7 +1179,7 @@ export function StudioClient() {
           </div>
         </nav>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.42fr)_minmax(290px,0.78fr)]">
+        <div className="mx-auto grid w-full max-w-5xl gap-6 2xl:grid-cols-[minmax(0,1.42fr)_minmax(290px,0.78fr)]">
           <main className="space-y-6">
             <section className={getStepPanelClass("trip")}>
               <div className="flex flex-col gap-4 border-b border-[var(--line)] pb-5 lg:flex-row lg:items-end lg:justify-between">
@@ -1276,9 +1282,8 @@ export function StudioClient() {
 
               <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(260px,0.9fr)]">
                 <div className="space-y-4">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
+                  <label
+                    htmlFor="studio-photo-picker"
                     className="flex min-h-[14rem] w-full cursor-pointer flex-col items-center justify-center rounded-[30px] border border-dashed border-[rgba(15,118,110,0.26)] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(239,247,245,0.96))] px-6 py-8 text-center transition hover:border-[var(--accent)] hover:bg-white"
                   >
                     <span className="rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
@@ -1293,7 +1298,7 @@ export function StudioClient() {
                     <p className="mt-4 text-xs font-medium text-slate-500">
                       갤럭시 사진은 위치 태그가 켜져 있으면 자동 정리 정확도가 더 높습니다.
                     </p>
-                  </button>
+                  </label>
                   <input
                     ref={fileInputRef}
                     id="studio-photo-picker"
@@ -1305,13 +1310,12 @@ export function StudioClient() {
                   />
 
                   <div className="flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                      onClick={() => fileInputRef.current?.click()}
+                    <label
+                      htmlFor="studio-photo-picker"
+                      className="button-secondary inline-flex cursor-pointer rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
                     >
                       사진 다시 고르기
-                    </button>
+                    </label>
                     {selectedUploads.length > 0 ? (
                       <span className="rounded-full bg-[var(--accent-soft)] px-4 py-3 text-sm font-semibold text-[var(--accent)]">
                         {selectedUploads.length}장 선택됨
@@ -1968,7 +1972,7 @@ export function StudioClient() {
             </section>
           </main>
 
-          <aside className="hidden space-y-6 xl:block">
+          <aside className="hidden space-y-6 2xl:block">
             <div className="studio-card rounded-[32px] p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                 지금 상태
@@ -2042,7 +2046,7 @@ export function StudioClient() {
           </aside>
         </div>
 
-        <div className="mobile-step-dock rounded-[24px] p-3 xl:mx-auto xl:w-full xl:max-w-[52rem]">
+        <div className="mobile-step-dock mx-auto w-full max-w-5xl rounded-[24px] p-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -2057,7 +2061,26 @@ export function StudioClient() {
               이전
             </button>
             <div className="min-w-0 flex-1 rounded-[18px] border border-[var(--line)] bg-white px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <div className="grid grid-cols-5 gap-1.5">
+                {studioSteps.map((step) => {
+                  const isCurrent = step.id === activeStep;
+                  const isCompleted = step.index < currentStepIndex;
+
+                  return (
+                    <span
+                      key={step.id}
+                      className={`h-1.5 rounded-full ${
+                        isCurrent
+                          ? "bg-[var(--accent)]"
+                          : isCompleted
+                            ? "bg-[rgba(160,62,64,0.24)]"
+                            : "bg-[var(--sand)]"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                 {currentStepIndex} / {studioSteps.length}
               </p>
               <p className="mt-1 truncate text-sm font-semibold text-slate-950">
