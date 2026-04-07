@@ -990,16 +990,16 @@ export function StudioClient() {
     <div className="relative px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <section
-          className={`studio-hero rounded-[32px] border border-white/70 px-5 py-5 sm:px-8 ${activeStep === "trip" ? "sm:py-8" : "sm:py-6"}`}
+          className={`studio-hero rounded-[32px] border border-white/70 px-5 py-6 sm:px-8 ${activeStep === "trip" ? "sm:py-10" : "sm:py-7"}`}
         >
-          <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-3xl space-y-5">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-[rgba(255,255,255,0.78)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
+          <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,1.45fr)_minmax(260px,0.55fr)] xl:items-start">
+            <div className="max-w-3xl space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="rounded-full bg-[var(--sand)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
                   Triplogue Studio
                 </span>
-                <span className="rounded-full border border-[var(--line)] bg-white/70 px-4 py-2 text-xs font-medium text-slate-600">
-                  업로드부터 포토북 생성까지 한 화면에서
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                  Step {String(currentStepIndex).padStart(2, "0")} / {String(studioSteps.length).padStart(2, "0")}
                 </span>
               </div>
 
@@ -1021,43 +1021,47 @@ export function StudioClient() {
               <div className={`flex flex-wrap gap-3 ${activeStep === "trip" ? "" : "hidden sm:flex"}`}>
                 <button
                   type="button"
-                  className="button-primary rounded-full px-5 py-3 text-sm font-semibold text-white"
+                  className="button-primary rounded-[18px] px-5 py-3 text-sm font-semibold text-white"
                   onClick={() => moveToStep("trip")}
                 >
-                  내 사진으로 시작
+                  {draft ? "내 여행 이어서 보기" : "내 사진으로 시작"}
                 </button>
                 <button
                   type="button"
-                  className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
+                  className="button-secondary rounded-[18px] px-5 py-3 text-sm font-semibold text-slate-900"
                   onClick={handleLoadDemo}
                 >
                   샘플 초안 불러오기
                 </button>
-                <Link
-                  href="/ops/launchpad"
-                  className="button-secondary rounded-full px-5 py-3 text-sm font-semibold text-slate-900"
-                >
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                <Link href="/ops/launchpad" className="font-medium text-[var(--accent)] underline-offset-4 hover:underline">
                   운영 화면 열기
                 </Link>
+                <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:inline-flex" />
+                <p className="text-sm text-slate-500">
+                  업로드, 정리, 포맷 선택, Sweetbook 생성까지 한 흐름으로 이어집니다.
+                </p>
               </div>
             </div>
 
-            <div className="studio-card hidden w-full gap-4 rounded-[28px] p-5 xl:grid xl:max-w-[23rem]">
-              <div className="flex items-center justify-between gap-3">
+            <div className="studio-card hidden w-full gap-5 rounded-[28px] p-6 xl:grid">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                    현재 단계
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    진행 상태
                   </p>
                   <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                    {currentStepIndex}. {studioSteps[currentStepIndex - 1]?.label}
+                    {currentStepMeta.label}
                   </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{currentStepMeta.copy}</p>
                 </div>
                 <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
                   {draft ? (isDemoSession ? "샘플 세션" : "실사진 세션") : "세션 준비 전"}
                 </span>
               </div>
 
-              <div className="grid gap-3">
+              <div className="grid grid-cols-5 gap-2">
                 {studioSteps.map((step) => {
                   const isCurrent = step.id === activeStep;
                   const isCompleted = step.index < currentStepIndex;
@@ -1065,41 +1069,76 @@ export function StudioClient() {
                   return (
                     <div
                       key={step.id}
-                      className={`rounded-[24px] border px-4 py-4 transition ${
+                      className={`h-1.5 rounded-full ${
                         isCurrent
-                          ? "border-[rgba(15,118,110,0.24)] bg-[rgba(15,118,110,0.08)]"
+                          ? "bg-[var(--accent)]"
                           : isCompleted
-                            ? "border-[rgba(243,123,87,0.16)] bg-[rgba(255,255,255,0.92)]"
-                            : "border-[var(--line)] bg-white/72"
+                            ? "bg-[rgba(160,62,64,0.28)]"
+                            : "bg-[var(--sand)]"
                       }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
-                            isCurrent
-                              ? "bg-[var(--accent)] text-white"
-                              : isCompleted
-                                ? "bg-[var(--accent-secondary-soft)] text-[var(--accent-secondary)]"
-                                : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {step.index}
-                        </span>
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{step.label}</p>
-                          <p className="mt-1 text-xs leading-5 text-slate-500">{step.copy}</p>
-                        </div>
-                      </div>
-                    </div>
+                    />
                   );
                 })}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[22px] bg-[var(--sand)] px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    사진
+                  </p>
+                  <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-slate-950">
+                    {draft?.stats.totalPhotos ?? 0}장
+                  </p>
+                </div>
+                <div className="rounded-[22px] bg-white px-4 py-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    챕터
+                  </p>
+                  <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-slate-950">
+                    {draft?.chapters.length ?? 0}개
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        <nav className="wizard-rail rounded-[24px] p-2">
-          <div className="scroll-row flex gap-2 overflow-x-auto">
+        <nav className="wizard-rail rounded-[28px] px-4 py-4 sm:px-5">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+                Step {String(currentStepIndex).padStart(2, "0")}
+              </p>
+              <p className="mt-1 text-base font-semibold tracking-[-0.03em] text-slate-950">
+                {currentStepMeta.label}
+              </p>
+            </div>
+            <p className="text-xs font-medium text-slate-500">
+              {currentStepIndex} / {studioSteps.length}
+            </p>
+          </div>
+
+          <div className="mt-4 grid grid-cols-5 gap-2">
+            {studioSteps.map((step) => {
+              const isCurrent = step.id === activeStep;
+              const isCompleted = step.index < currentStepIndex;
+
+              return (
+                <div
+                  key={step.id}
+                  className={`h-1.5 rounded-full ${
+                    isCurrent
+                      ? "bg-[var(--accent)]"
+                      : isCompleted
+                        ? "bg-[rgba(160,62,64,0.26)]"
+                        : "bg-[var(--sand)]"
+                  }`}
+                />
+              );
+            })}
+          </div>
+
+          <div className="scroll-row mt-4 flex gap-2 overflow-x-auto pb-1">
             {studioSteps.map((step) => {
               const isCurrent = step.id === activeStep;
               const isCompleted = step.index < currentStepIndex;
@@ -1109,7 +1148,7 @@ export function StudioClient() {
                 <button
                   key={step.id}
                   type="button"
-                  className={`wizard-pill min-w-[8.4rem] rounded-[20px] px-3 py-3 text-left ${isCurrent ? "is-active" : ""} ${isCompleted ? "is-complete" : ""}`}
+                  className={`wizard-pill min-w-[8.4rem] rounded-[18px] px-3 py-3 text-left ${isCurrent ? "is-active" : ""} ${isCompleted ? "is-complete" : ""}`}
                   onClick={() => {
                     if (isAvailable) {
                       moveToStep(step.id);
@@ -1117,10 +1156,17 @@ export function StudioClient() {
                   }}
                   disabled={!isAvailable}
                 >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
-                    {step.index}단계
-                  </p>
-                  <p className="mt-2 text-sm font-semibold">{step.label}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/5 text-[11px] font-semibold">
+                      {step.index}
+                    </span>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">
+                        step
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">{step.label}</p>
+                    </div>
+                  </div>
                 </button>
               );
             })}
@@ -1996,11 +2042,11 @@ export function StudioClient() {
           </aside>
         </div>
 
-        <div className="mobile-step-dock rounded-[26px] p-3 xl:mx-auto xl:w-full xl:max-w-[52rem]">
+        <div className="mobile-step-dock rounded-[24px] p-3 xl:mx-auto xl:w-full xl:max-w-[52rem]">
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="button-secondary min-h-12 shrink-0 rounded-full px-4 py-3 text-sm font-semibold text-slate-900 disabled:opacity-45"
+              className="button-secondary min-h-12 shrink-0 rounded-[16px] px-4 py-3 text-sm font-semibold text-slate-900 disabled:opacity-45"
               onClick={() => {
                 if (previousStep) {
                   moveToStep(previousStep.id);
@@ -2010,7 +2056,7 @@ export function StudioClient() {
             >
               이전
             </button>
-            <div className="min-w-0 flex-1 rounded-[20px] border border-[var(--line)] bg-white px-4 py-3">
+            <div className="min-w-0 flex-1 rounded-[18px] border border-[var(--line)] bg-white px-4 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                 {currentStepIndex} / {studioSteps.length}
               </p>
@@ -2021,7 +2067,7 @@ export function StudioClient() {
             {mobilePrimaryAction ? (
               <button
                 type="button"
-                className="button-primary min-h-12 shrink-0 rounded-full px-4 py-3 text-sm font-semibold text-white disabled:opacity-45"
+                className="button-primary min-h-12 shrink-0 rounded-[16px] px-4 py-3 text-sm font-semibold text-white disabled:opacity-45"
                 onClick={mobilePrimaryAction.onClick}
                 disabled={mobilePrimaryAction.disabled}
               >
