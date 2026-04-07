@@ -5,7 +5,7 @@ import type { TripDraft } from "@/lib/trip-draft";
 const demoTripSeedPhotos: ImportedPhoto[] = [
   {
     id: "demo-photo-01",
-    assetId: null,
+    assetId: "demo-assets/trip-01.png",
     fileName: "tokyo-shibuya-001.jpg",
     originalName: "tokyo-shibuya-001.jpg",
     mimeType: "image/jpeg",
@@ -23,7 +23,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-02",
-    assetId: null,
+    assetId: "demo-assets/trip-02.png",
     fileName: "tokyo-shibuya-002.jpg",
     originalName: "tokyo-shibuya-002.jpg",
     mimeType: "image/jpeg",
@@ -41,7 +41,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-03",
-    assetId: null,
+    assetId: "demo-assets/trip-03.png",
     fileName: "tokyo-shibuya-003.jpg",
     originalName: "tokyo-shibuya-003.jpg",
     mimeType: "image/jpeg",
@@ -59,7 +59,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-04",
-    assetId: null,
+    assetId: "demo-assets/trip-04.png",
     fileName: "tokyo-asakusa-001.jpg",
     originalName: "tokyo-asakusa-001.jpg",
     mimeType: "image/jpeg",
@@ -77,7 +77,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-05",
-    assetId: null,
+    assetId: "demo-assets/trip-05.png",
     fileName: "tokyo-asakusa-002.jpg",
     originalName: "tokyo-asakusa-002.jpg",
     mimeType: "image/jpeg",
@@ -92,7 +92,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-06",
-    assetId: null,
+    assetId: "demo-assets/trip-06.png",
     fileName: "tokyo-asakusa-003.jpg",
     originalName: "tokyo-asakusa-003.jpg",
     mimeType: "image/jpeg",
@@ -110,7 +110,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-07",
-    assetId: null,
+    assetId: "demo-assets/trip-07.png",
     fileName: "kawaguchiko-001.jpg",
     originalName: "kawaguchiko-001.jpg",
     mimeType: "image/jpeg",
@@ -128,7 +128,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-08",
-    assetId: null,
+    assetId: "demo-assets/trip-08.png",
     fileName: "kawaguchiko-002.jpg",
     originalName: "kawaguchiko-002.jpg",
     mimeType: "image/jpeg",
@@ -146,7 +146,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-09",
-    assetId: null,
+    assetId: "demo-assets/trip-01.png",
     fileName: "kawaguchiko-003.jpg",
     originalName: "kawaguchiko-003.jpg",
     mimeType: "image/jpeg",
@@ -161,7 +161,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-10",
-    assetId: null,
+    assetId: "demo-assets/trip-02.png",
     fileName: "tokyo-evening-001.jpg",
     originalName: "tokyo-evening-001.jpg",
     mimeType: "image/jpeg",
@@ -176,7 +176,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-11",
-    assetId: null,
+    assetId: "demo-assets/trip-03.png",
     fileName: "tokyo-evening-002.jpg",
     originalName: "tokyo-evening-002.jpg",
     mimeType: "image/jpeg",
@@ -191,7 +191,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-12",
-    assetId: null,
+    assetId: "demo-assets/trip-04.png",
     fileName: "haneda-001.jpg",
     originalName: "haneda-001.jpg",
     mimeType: "image/jpeg",
@@ -209,7 +209,7 @@ const demoTripSeedPhotos: ImportedPhoto[] = [
   },
   {
     id: "demo-photo-13",
-    assetId: null,
+    assetId: "demo-assets/trip-05.png",
     fileName: "haneda-002.jpg",
     originalName: "haneda-002.jpg",
     mimeType: "image/jpeg",

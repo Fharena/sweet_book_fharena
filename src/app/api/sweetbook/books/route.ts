@@ -9,7 +9,6 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       bookSpecUid?: string;
       title?: string;
-      creationType?: "TEST" | "NORMAL";
       specProfileUid?: string;
       externalRef?: string;
     };
@@ -24,7 +23,6 @@ export async function POST(request: Request) {
     const data = await sweetbookClient.createBook({
       bookSpecUid: body.bookSpecUid,
       title: body.title,
-      creationType: body.creationType,
       specProfileUid: body.specProfileUid,
       externalRef: body.externalRef,
     });

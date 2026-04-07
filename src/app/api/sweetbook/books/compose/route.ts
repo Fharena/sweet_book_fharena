@@ -7,6 +7,14 @@ import { loadUploadedFile } from "@/lib/server/uploads";
 
 export const runtime = "nodejs";
 
+type JsonLike =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonLike[]
+  | { [key: string]: JsonLike };
+
 function requirePhotoAsset(photo: ImportedPhoto) {
   if (!photo.assetId) {
     throw new Error(`Photo ${photo.fileName} is missing a stored assetId.`);
@@ -16,6 +24,30 @@ function requirePhotoAsset(photo: ImportedPhoto) {
     fileName: photo.originalName,
     mimeType: photo.mimeType,
   });
+}
+
+function replacePhotoReferences(
+  value: JsonLike,
+  uploadedFileNamesByPhotoId: Map<string, string>,
+): JsonLike {
+  if (typeof value === "string") {
+    return uploadedFileNamesByPhotoId.get(value) ?? value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => replacePhotoReferences(item, uploadedFileNamesByPhotoId));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        replacePhotoReferences(nestedValue as JsonLike, uploadedFileNamesByPhotoId),
+      ]),
+    );
+  }
+
+  return value;
 }
 
 export async function POST(request: Request) {
@@ -42,7 +74,6 @@ export async function POST(request: Request) {
     const createdBook = await sweetbookClient.createBook({
       bookSpecUid: plan.bookSpecUid,
       title: plan.title,
-      creationType: "TEST",
     });
     const createdBookRecord = createdBook as {
       data?: { bookUid?: string };
@@ -56,18 +87,35 @@ export async function POST(request: Request) {
       throw new Error("Sweetbook book creation did not return bookUid.");
     }
 
+    const uploadedFileNamesByPhotoId = new Map<string, string>();
+    for (const photo of draft.photos) {
+      const file = await requirePhotoAsset(photo);
+      const uploadResult = (await sweetbookClient.uploadPhoto(bookUid, file)) as {
+        data?: { fileName?: string };
+        fileName?: string;
+      };
+      const uploadedFileName = uploadResult.data?.fileName ?? uploadResult.fileName;
+
+      if (!uploadedFileName || typeof uploadedFileName !== "string") {
+        throw new Error(`Photo upload for ${photo.fileName} did not return fileName.`);
+      }
+
+      uploadedFileNamesByPhotoId.set(photo.id, uploadedFileName);
+    }
+
     const coverOperation = plan.operations.find((operation) => operation.kind === "cover");
     if (!coverOperation) {
       throw new Error("Cover operation is missing from the generated plan.");
     }
 
-    const coverPhoto = draft.photos[0];
-    const coverFile = await requirePhotoAsset(coverPhoto);
     const coverResult = await sweetbookClient.createCover(
       bookUid,
       coverOperation.templateUid,
-      coverOperation.parameters,
-      [coverFile],
+      replacePhotoReferences(
+        coverOperation.parameters as JsonLike,
+        uploadedFileNamesByPhotoId,
+      ) as Record<string, unknown>,
+      [],
       "coverPhoto",
     );
 
@@ -78,46 +126,34 @@ export async function POST(request: Request) {
           await sweetbookClient.insertContent(
             bookUid,
             operation.templateUid,
-            operation.parameters,
+            replacePhotoReferences(
+              operation.parameters as JsonLike,
+              uploadedFileNamesByPhotoId,
+            ) as Record<string, unknown>,
           ),
         );
         continue;
       }
 
-      if (operation.kind === "publish") {
-        const publishFile = await requirePhotoAsset(coverPhoto);
-        contentResults.push(
-          await sweetbookClient.insertContent(
-            bookUid,
-            operation.templateUid,
-            operation.parameters,
-            [publishFile],
-            undefined,
-            "photo",
-          ),
-        );
-        continue;
-      }
-
-      const files = await Promise.all(
-        (operation.photoIds ?? []).map(async (photoId) => {
-          const photo = photoById.get(photoId);
-          if (!photo) {
+      if (operation.kind !== "publish") {
+        for (const photoId of operation.photoIds ?? []) {
+          if (!photoById.has(photoId)) {
             throw new Error(`Photo ${photoId} referenced by the plan is missing.`);
           }
-
-          return requirePhotoAsset(photo);
-        }),
-      );
+        }
+      }
 
       contentResults.push(
         await sweetbookClient.insertContent(
           bookUid,
           operation.templateUid,
-          operation.parameters,
-          files,
+          replacePhotoReferences(
+            operation.parameters as JsonLike,
+            uploadedFileNamesByPhotoId,
+          ) as Record<string, unknown>,
+          [],
           undefined,
-          "photos",
+          operation.kind === "publish" ? "photo" : "photos",
         ),
       );
     }

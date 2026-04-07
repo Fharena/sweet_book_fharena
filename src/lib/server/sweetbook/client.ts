@@ -27,7 +27,6 @@ type DeliveryFilter = {
 type CreateBookInput = {
   bookSpecUid: string;
   title?: string;
-  creationType?: "TEST" | "NORMAL";
   specProfileUid?: string;
   externalRef?: string;
 };
@@ -114,12 +113,11 @@ export const sweetbookClient = {
 
   createBook(input: CreateBookInput) {
     return sweetbookRequest({
-      path: "/Books",
+      path: "/books",
       options: {
         method: "POST",
         json: {
           bookSpecUid: input.bookSpecUid,
-          creationType: input.creationType ?? "TEST",
           ...(input.title ? { title: input.title } : {}),
           ...(input.specProfileUid ? { specProfileUid: input.specProfileUid } : {}),
           ...(input.externalRef ? { externalRef: input.externalRef } : {}),
@@ -136,7 +134,7 @@ export const sweetbookClient = {
     }
 
     return sweetbookRequest({
-      path: `/Books/${bookUid}/photos`,
+      path: `/books/${bookUid}/photos`,
       options: {
         method: "POST",
         formData,
@@ -157,7 +155,7 @@ export const sweetbookClient = {
     files.forEach((file) => formData.append(fileFieldName, file));
 
     return sweetbookRequest({
-      path: `/Books/${bookUid}/cover`,
+      path: `/books/${bookUid}/cover`,
       options: {
         method: "POST",
         formData,
@@ -179,7 +177,7 @@ export const sweetbookClient = {
     files.forEach((file) => formData.append(fileFieldName, file));
 
     return sweetbookRequest({
-      path: `/Books/${bookUid}/contents`,
+      path: `/books/${bookUid}/contents`,
       options: {
         method: "POST",
         searchParams: {
@@ -192,7 +190,7 @@ export const sweetbookClient = {
 
   finalizeBook(bookUid: string) {
     return sweetbookRequest({
-      path: `/Books/${bookUid}/finalization`,
+      path: `/books/${bookUid}/finalization`,
       options: {
         method: "POST",
         json: {},

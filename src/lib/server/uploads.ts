@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const uploadsRoot = path.join(process.cwd(), "tmp", "uploads");
+const publicRoot = path.join(process.cwd(), "public");
 const mimeTypeByExtension: Record<string, string> = {
   ".avif": "image/avif",
   ".bmp": "image/bmp",
@@ -27,6 +28,18 @@ export function resolveUploadPath(assetId: string) {
   const relativePath = path.relative(normalizedRoot, absolutePath);
   if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     throw new Error("Invalid asset path.");
+  }
+
+  return absolutePath;
+}
+
+export function resolvePublicAssetPath(assetId: string) {
+  const absolutePath = path.resolve(publicRoot, assetId);
+  const normalizedRoot = path.resolve(publicRoot);
+  const relativePath = path.relative(normalizedRoot, absolutePath);
+
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    throw new Error("Invalid public asset path.");
   }
 
   return absolutePath;
@@ -77,9 +90,24 @@ export async function loadUploadedFile(
   assetId: string,
   options: { fileName: string; mimeType: string },
 ) {
-  const asset = await readUploadedAsset(assetId);
+  const isDemoAsset = assetId.startsWith("demo-assets/");
+  const absolutePath = isDemoAsset ? resolvePublicAssetPath(assetId) : resolveUploadPath(assetId);
+  const fileStats = await stat(absolutePath);
 
-  return new File([asset.buffer], options.fileName, {
-    type: options.mimeType || asset.mimeType || "application/octet-stream",
+  if (!fileStats.isFile()) {
+    throw new Error("Uploaded asset is not a file.");
+  }
+
+  const buffer = await readFile(absolutePath);
+  const asset = {
+    buffer,
+    fileName: path.basename(assetId),
+    mimeType: inferUploadedMimeType(path.basename(assetId)),
+  };
+
+  return new File([asset.buffer], isDemoAsset ? asset.fileName : options.fileName, {
+    type: isDemoAsset
+      ? asset.mimeType || "application/octet-stream"
+      : options.mimeType || asset.mimeType || "application/octet-stream",
   });
 }
