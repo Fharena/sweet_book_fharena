@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+import { Manrope } from "next/font/google";
+import { AutoDarkGuard } from "@/components/auto-dark-guard";
+import "./globals.css";
+
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Triplogue",
+  description:
+    "여행 사진을 시간과 위치 기준으로 정리해 포토북 초안과 주문 흐름으로 연결하는 서비스",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="ko"
+      className={`${manrope.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
+      <head>
+        <meta name="color-scheme" content="light" />
+        <meta name="supported-color-schemes" content="light" />
+        <meta name="theme-color" content="#fbf9f4" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        />
+      </head>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <AutoDarkGuard />
+        {children}
+      </body>
+    </html>
+  );
+}
